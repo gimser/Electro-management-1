@@ -1,5 +1,9 @@
 {
-  "name": "Electro GIM Services Management System",
-  "description": "A comprehensive Moroccan business management system for technical services, featuring client management, invoicing, contracts, and legal document generation in Arabic.",
-  "requestFramePermissions": []
+  "name": "GIM Services - Digital & Security Operating System",
+  "description": "نظام الإدارة المتكامل لشركة GIM Services المتخصصة في الشبكات، الكاميرات، الحلول الرقمية، والبيت الذكي.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
 }
