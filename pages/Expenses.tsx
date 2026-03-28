@@ -1,6 +1,8 @@
 
 import React, { useState } from 'react';
 import { AppState, Expense } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { createRecord } from '../db';
 import { Plus, Trash2, Wallet, Calendar, Tag, CreditCard, Search } from 'lucide-react';
 
 interface ExpensesPageProps {
@@ -9,6 +11,7 @@ interface ExpensesPageProps {
 }
 
 const ExpensesPage: React.FC<ExpensesPageProps> = ({ state, updateState }) => {
+  const { user: authUser } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<Omit<Expense, 'id'>>({
     description: '',
@@ -25,7 +28,16 @@ const ExpensesPage: React.FC<ExpensesPageProps> = ({ state, updateState }) => {
     };
     updateState(prev => ({
       ...prev,
-      expenses: [...prev.expenses, newExpense]
+      expenses: [...prev.expenses, newExpense],
+      activityLogs: [createRecord({
+        userId: authUser?.id || 'system',
+        username: authUser?.fullName || 'System',
+        action: 'EXPENSE_ADDED',
+        module: 'FINANCE',
+        timestamp: new Date().toISOString(),
+        details: `تسجيل مصروف جديد: ${newExpense.description} بمبلغ ${newExpense.amount} DH`,
+        severity: 'Info'
+      }), ...(prev.activityLogs || [])]
     }));
     setShowForm(false);
     setFormData({ description: '', amount: 0, date: new Date().toISOString().split('T')[0], category: 'Other' });

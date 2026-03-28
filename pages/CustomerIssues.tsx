@@ -1,16 +1,10 @@
 
-import React, { useState, useEffect } from 'react';
-import { AppState, CustomerIssue, IssueStatus, IssueSource, IssueComment, Task, Visit, Client, Technician } from '../types';
+import React, { useState } from 'react';
+import { AppState, CustomerIssue, GIMServiceCategory } from '../types';
 import { 
-  Plus, Search, Trash2, CheckCircle2, AlertCircle, Clock, User, 
-  Filter, ShieldAlert, LifeBuoy, Zap, Lightbulb, Repeat, X, 
-  Save, MessageCircle, Facebook, Instagram, Globe, Phone, ImageIcon, 
-  Video, Send, UserCheck, Play, ArrowRight, Settings2, 
-  History, CheckCircle, Info, Sparkles, Brain, Activity,
-  Loader2, BarChart3, Eye, Share2, MessageSquare, Radio,
-  MapPin, Navigation, ArrowUpRight
+  Bell, Plus, Trash2, Edit2, AlertCircle, 
+  CheckCircle2, X, Save, Clock, Tag, MessageSquare, ShieldAlert
 } from 'lucide-react';
-import { GoogleGenAI, Type } from "@google/genai";
 
 interface CustomerIssuesPageProps {
   state: AppState;
@@ -19,12 +13,9 @@ interface CustomerIssuesPageProps {
 
 const CustomerIssuesPage: React.FC<CustomerIssuesPageProps> = ({ state, updateState }) => {
   const [showForm, setShowForm] = useState(false);
-  const [activeIssue, setActiveIssue] = useState<CustomerIssue | null>(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<IssueStatus | 'All'>('All');
-  const [isAiAnalyzing, setIsAiAnalyzing] = useState(false);
-  const [geoSuggestion, setGeoSuggestion] = useState<{techName: string, city: string} | null>(null);
-  
+  const [editingIssue, setEditingIssue] = useState<CustomerIssue | null>(null);
+
   const [formData, setFormData] = useState<Omit<CustomerIssue, 'id' | 'createdAt' | 'comments'>>({
     clientId: '',
     title: '',
@@ -33,359 +24,152 @@ const CustomerIssuesPage: React.FC<CustomerIssuesPageProps> = ({ state, updateSt
     status: 'Open',
     source: 'Direct',
     category: 'Security & Networks',
-    aiInsights: '',
-    aiSuggestedSolution: '',
+    systemAnalysis: '',
+    logicSuggestedSolution: '',
     mediaUrls: []
   });
 
-  // محرك التحليل الجغرافي اللحظي (سيبقى كمقترح ولكن الأولوية للبث العام)
-  useEffect(() => {
-    if (formData.clientId) {
-      const client = state.clients.find(c => c.id === formData.clientId);
-      if (client) {
-        const today = new Date().toISOString().split('T')[0];
-        const nearbyVisit = state.visits.find(v => {
-          const vClient = state.clients.find(c => c.id === v.clientId);
-          return vClient?.city === client.city && v.date === today && v.status !== 'Cancelled';
-        });
-
-        if (nearbyVisit) {
-          const tech = state.technicians.find(t => t.id === nearbyVisit.technicianId);
-          if (tech) {
-            setGeoSuggestion({ techName: tech.name, city: client.city });
-          }
-        } else {
-          setGeoSuggestion(null);
-        }
-      }
-    }
-  }, [formData.clientId, state.visits, state.clients, state.technicians]);
-
-  const getSourceIcon = (source: IssueSource) => {
-    switch(source) {
-      case 'WhatsApp': return <MessageCircle size={14} className="text-green-500" />;
-      case 'Facebook': return <Facebook size={14} className="text-blue-600" />;
-      case 'Instagram': return <Instagram size={14} className="text-pink-600" />;
-      case 'Website': return <Globe size={14} className="text-purple-600" />;
-      case 'Phone': return <Phone size={14} className="text-slate-600" />;
-      default: return <User size={14} className="text-slate-400" />;
-    }
-  };
-
-  const getStatusStyle = (status: IssueStatus) => {
-    switch(status) {
-      case 'Open': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'Analyzing': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'Assigned': return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'In-Progress': return 'bg-indigo-100 text-indigo-700 border-indigo-200';
-      case 'Resolved': return 'bg-green-100 text-green-700 border-green-200';
-      case 'Re-opened': return 'bg-red-100 text-red-700 border-red-200';
-      case 'Cancelled': return 'bg-slate-100 text-slate-500 border-slate-200';
-      default: return 'bg-slate-100 text-slate-500';
-    }
-  };
-
-  const analyzeWithAI = async (title: string, description: string, source: IssueSource) => {
-    setIsAiAnalyzing(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Analyze this multi-channel support request for Electro GIM Services:
-                   Source: ${source}
-                   Title: ${title}
-                   Description: ${description}`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              category: { type: Type.STRING },
-              isCritical: { type: Type.BOOLEAN },
-              insight: { type: Type.STRING },
-              suggestedReply: { type: Type.STRING }
-            },
-            required: ["category", "isCritical", "insight", "suggestedReply"]
-          }
-        }
-      });
-      
-      const result = JSON.parse(response.text || '{}');
-      return result;
-    } catch (error) {
-      return { category: 'General', isCritical: false, insight: "تحليل يدوي مطلوب", suggestedReply: "شكراً لتواصلكم." };
-    } finally {
-      setIsAiAnalyzing(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.clientId) return alert('الرجاء اختيار الزبون');
-    
-    const aiResult = await analyzeWithAI(formData.title, formData.description, formData.source);
-    const issueId = crypto.randomUUID();
+    if (!formData.clientId) return alert('الرجاء اختيار الزبون أولاً');
+
+    const issueId = editingIssue?.id || crypto.randomUUID();
     
     const newIssue: CustomerIssue = {
       ...formData,
       id: issueId,
-      createdAt: new Date().toISOString(),
-      comments: [],
-      category: aiResult.category as any,
-      priority: aiResult.isCritical ? 'High' : formData.priority,
-      aiInsights: aiResult.insight,
-      aiSuggestedSolution: aiResult.suggestedReply
-    };
-
-    // سيناريو البث العام (Broadcast System):
-    // يتم إرسال المهمة بدون تقني محدد (BROADCAST) لتظهر عند الجميع
-    const taskId = crypto.randomUUID();
-    const task: Task = {
-      id: taskId,
-      title: `[بث عام] ${newIssue.title}`,
-      clientId: formData.clientId,
-      date: new Date().toISOString().split('T')[0],
-      time: new Date().toTimeString().slice(0,5),
-      technician: 'BROADCAST_POOL', // علامة بأنها متاحة للجميع
-      status: 'Pending',
-      description: formData.description
-    };
-
-    const visit: Visit = {
-      id: crypto.randomUUID(),
-      clientId: formData.clientId,
-      technicianId: 'BROADCAST', // هوية البث العام
-      taskId: taskId,
-      date: task.date,
-      scheduledTime: task.time,
-      status: 'Planned',
-      isBilled: false,
-      notes: `بث عام: ${task.title}`
+      createdAt: editingIssue?.createdAt || new Date().toISOString(),
+      comments: editingIssue?.comments || [],
+      systemAnalysis: `تم تحليل العطل في قسم ${formData.category} وتصنيفه كأولوية ${formData.priority}`,
+      logicSuggestedSolution: editingIssue?.logicSuggestedSolution || 'بانتظار الفحص الميداني الدقيق'
     };
 
     updateState(prev => ({
       ...prev,
-      customerIssues: [...prev.customerIssues, newIssue],
-      tasks: [...prev.tasks, task],
-      visits: [...(prev.visits || []), visit],
-      automationLogs: [{
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        action: 'ISSUE_BROADCASTED',
-        status: 'success',
-        details: `تم بث المشكلة "${newIssue.title}" لجميع التقنيين. بانتظار قبول أول استجابة.`
-      }, ...(prev.automationLogs || [])]
+      customerIssues: editingIssue 
+        ? prev.customerIssues.map(iss => iss.id === editingIssue.id ? newIssue : iss)
+        : [newIssue, ...prev.customerIssues]
     }));
-    
-    setShowForm(false);
     resetForm();
-    alert('تم تسجيل البلاغ وبثه فوراً لجميع التقنيين المتاحين.');
   };
 
   const resetForm = () => {
     setFormData({ 
       clientId: '', title: '', description: '', priority: 'Medium', status: 'Open', 
-      source: 'Direct', category: 'General' as any, aiInsights: '', aiSuggestedSolution: '', mediaUrls: [] 
+      source: 'Direct', category: 'Security & Networks', systemAnalysis: '', 
+      logicSuggestedSolution: '', mediaUrls: [] 
     });
-    setGeoSuggestion(null);
+    setEditingIssue(null);
+    setShowForm(false);
   };
 
-  const filteredIssues = (state.customerIssues || []).filter(iss => {
-    const client = state.clients.find(c => c.id === iss.clientId);
-    const matchesSearch = iss.title.toLowerCase().includes(search.toLowerCase()) || 
-                         (client?.name.toLowerCase().includes(search.toLowerCase()));
-    const matchesStatus = statusFilter === 'All' || iss.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredIssues = state.customerIssues.filter(iss => 
+    iss.title.toLowerCase().includes(search.toLowerCase()) || 
+    iss.description.toLowerCase().includes(search.toLowerCase())
+  );
 
   return (
-    <div className="p-8 animate-in fade-in duration-500 pb-24 text-right" dir="rtl">
-      
-      <div className="flex justify-between items-center mb-10">
+    <div className="p-8 animate-slide-up text-right font-arabic pb-40" dir="rtl">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
         <div>
           <h2 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-             <Share2 className="text-blue-600" size={32} /> مركز الدعم والبث الموحد
+             <Bell className="text-red-500" size={32} /> إدارة بلاغات الأعطال
           </h2>
-          <p className="text-slate-500 font-medium">استقبال البلاغات وبثها لحظياً لجميع كفاءات الميدان</p>
+          <p className="text-slate-500 font-medium">استقبال ومعالجة تذاكر الدعم الفني من الزبناء</p>
         </div>
-        <div className="flex gap-4">
-           <div className="hidden lg:flex items-center gap-4 bg-blue-50 px-6 py-2 rounded-2xl border border-blue-100 shadow-sm ml-4">
-              <Radio size={18} className="text-blue-600 animate-pulse" />
-              <span className="text-[10px] font-black text-blue-800 uppercase tracking-widest">نظام البث الفوري نشط</span>
-           </div>
-           <button 
-             onClick={() => setShowForm(true)}
-             className="bg-slate-900 text-white px-8 py-3.5 rounded-2xl font-black flex items-center gap-2 shadow-xl hover:bg-blue-600 transition-all"
-           >
-             <Plus size={20} /> تسجيل وبث بلاغ جديد
-           </button>
-        </div>
+        <button 
+          onClick={() => { resetForm(); setShowForm(true); }} 
+          className="bg-slate-900 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl hover:bg-blue-600 transition-all active:scale-95"
+        >
+          <Plus size={20} /> فتح تذكرة دعم
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-         {/* Sidebar Stats */}
-         <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm space-y-6">
-               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 pb-4 flex items-center gap-2">
-                  <Activity size={16} className="text-blue-500" /> تحليل القنوات
-               </h3>
-               <div className="space-y-4">
-                  {['WhatsApp', 'Instagram', 'Facebook', 'Direct'].map(src => (
-                     <div key={src} className="flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                           {getSourceIcon(src as any)}
-                           <span className="text-xs font-black text-slate-700">{src}</span>
-                        </div>
-                        <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded-md">
-                           {state.customerIssues.filter(i => i.source === src).length}
-                        </span>
-                     </div>
-                  ))}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {filteredIssues.length > 0 ? filteredIssues.map((issue) => (
+          <div key={issue.id} className="bg-white rounded-[3rem] border border-slate-200 p-8 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden flex flex-col h-full min-h-[300px]">
+            <div className={`absolute top-0 right-0 w-2 h-full ${issue.priority === 'High' ? 'bg-red-500' : issue.priority === 'Medium' ? 'bg-amber-500' : 'bg-blue-500'}`}></div>
+            <div className="flex justify-between items-start mb-6 pl-4">
+               <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase border ${issue.status === 'Resolved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-600 border-amber-200'}`}>
+                  {issue.status}
+               </span>
+               <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity absolute left-6 top-8">
+                  <button onClick={() => { setEditingIssue(issue); setFormData({...issue}); setShowForm(true); }} className="p-2 bg-slate-50 rounded-lg text-slate-400 hover:text-blue-600 transition-colors shadow-sm"><Edit2 size={16}/></button>
+                  <button onClick={() => { if(confirm('حذف البلاغ؟')) updateState(prev => ({...prev, customerIssues: prev.customerIssues.filter(i => i.id !== issue.id)}))}} className="p-2 bg-slate-50 rounded-lg text-slate-400 hover:text-red-600 transition-colors shadow-sm"><Trash2 size={16}/></button>
                </div>
             </div>
-         </div>
-
-         {/* Main List */}
-         <div className="lg:col-span-3 space-y-6">
-            <div className="flex gap-4">
-               <div className="relative flex-1">
-                  <Search className="absolute right-4 top-3 text-slate-400" size={18} />
-                  <input 
-                    className="w-full pr-12 pl-4 py-3 bg-white border border-slate-200 rounded-2xl font-bold shadow-sm focus:ring-2 focus:ring-blue-500 outline-none" 
-                    placeholder="بحث في سجل البلاغات..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-               </div>
-               <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm flex">
-                  {['All', 'Open', 'Assigned', 'Resolved'].map((stat) => (
-                    <button 
-                      key={stat}
-                      onClick={() => setStatusFilter(stat as any)}
-                      className={`px-6 py-2 rounded-xl text-[10px] font-black transition-all ${statusFilter === stat ? 'bg-slate-900 text-white' : 'text-slate-400'}`}
-                    >
-                      {stat === 'All' ? 'الكل' : stat}
-                    </button>
-                  ))}
-               </div>
+            <h3 className="text-xl font-black text-slate-800 mb-2 leading-tight">{issue.title}</h3>
+            <p className="text-xs text-slate-400 font-bold mb-6 line-clamp-4 leading-relaxed flex-1">{issue.description}</p>
+            <div className="mt-auto pt-6 border-t border-slate-50 flex justify-between items-center text-[10px] font-black uppercase text-slate-400">
+               <div className="flex items-center gap-2"><Clock size={12}/> {new Date(issue.createdAt).toLocaleDateString()}</div>
+               <div className="flex items-center gap-2"><Tag size={12}/> {issue.category}</div>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-               {filteredIssues.slice().reverse().map(issue => {
-                  const client = state.clients.find(c => c.id === issue.clientId);
-                  return (
-                     <div key={issue.id} className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden hover:shadow-xl transition-all group flex flex-col">
-                        <div className="p-8 flex-1">
-                           <div className="flex justify-between items-start mb-6">
-                              <div className="flex gap-2">
-                                 <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 shadow-inner">
-                                    {getSourceIcon(issue.source)}
-                                    <span className="text-[9px] font-black text-slate-600 uppercase">{issue.source}</span>
-                                 </div>
-                                 <span className={`text-[9px] font-black px-3 py-1.5 rounded-xl uppercase border ${getStatusStyle(issue.status)}`}>
-                                    {issue.status}
-                                 </span>
-                              </div>
-                              <span className="text-[10px] font-black text-slate-300 font-mono">#{issue.id.slice(0,6)}</span>
-                           </div>
-
-                           <div className="mb-4">
-                              <span className="text-[8px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded uppercase tracking-widest mb-1 inline-block">
-                                 {issue.category || 'General'}
-                              </span>
-                              <h3 className="text-xl font-black text-slate-800 leading-tight group-hover:text-blue-600 transition-colors">{issue.title}</h3>
-                           </div>
-
-                           <div className="flex items-center gap-3 mb-6 text-slate-500 bg-slate-50/50 p-3 rounded-2xl">
-                              <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-black">
-                                 {client?.name.charAt(0)}
-                              </div>
-                              <div>
-                                 <p className="text-xs font-black text-slate-800">{client?.name || '---'}</p>
-                                 <p className="text-[9px] font-bold text-slate-400">{client?.city}</p>
-                              </div>
-                           </div>
-
-                           <p className="text-xs text-slate-500 font-medium line-clamp-3 leading-relaxed">
-                              {issue.description}
-                           </p>
-                        </div>
-
-                        <div className="px-8 pb-8 flex gap-2">
-                           <button 
-                              onClick={() => setActiveIssue(issue)}
-                              className="flex-1 bg-slate-900 text-white text-[10px] font-black py-4 rounded-2xl hover:bg-blue-600 transition-all uppercase tracking-widest shadow-xl flex items-center justify-center gap-2"
-                           >
-                              <MessageSquare size={16} /> متابعة التفاصيل
-                           </button>
-                           <button className="p-4 bg-slate-50 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-600 transition-all">
-                              <Trash2 size={18} />
-                           </button>
-                        </div>
-                     </div>
-                  );
-               })}
-            </div>
-         </div>
+          </div>
+        )) : (
+          <div className="col-span-full py-20 text-center border-4 border-dashed border-slate-100 rounded-[3rem] opacity-30">
+             <MessageSquare size={48} className="mx-auto mb-4" />
+             <p className="font-black text-xl">لا توجد بلاغات مسجلة حالياً</p>
+          </div>
+        )}
       </div>
 
-      {/* Modal Form */}
       {showForm && (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[160] flex items-center justify-center p-4">
-           <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in duration-300">
-              <div className="p-8 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
-                 <div>
-                    <h3 className="text-2xl font-black text-blue-900 tracking-tighter uppercase">بث بلاغ زبون جديد</h3>
-                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mt-1">سيظهر هذا البلاغ عند جميع التقنيين فور حفظه</p>
-                 </div>
-                 <button onClick={() => setShowForm(false)} className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400 hover:text-red-600 transition-all"><X size={24} /></button>
-              </div>
-              <form onSubmit={handleSubmit} className="p-10 space-y-6">
-                 <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                       <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">اختيار الزبون</label>
-                       <select required className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
-                          <option value="">-- اختر الزبون من القائمة --</option>
-                          {state.clients.map(c => <option key={c.id} value={c.id}>{c.name} ({c.city})</option>)}
-                       </select>
-                    </div>
-
-                    <div className="col-span-2">
-                       <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">قناة الورود</label>
-                       <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                          {['WhatsApp', 'Facebook', 'Instagram', 'Website', 'Phone', 'Direct'].map(src => (
-                             <button 
-                                key={src}
-                                type="button"
-                                onClick={() => setFormData({...formData, source: src as any})}
-                                className={`p-3 rounded-xl border transition-all flex flex-col items-center gap-1 ${formData.source === src ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-400 border-slate-100 hover:border-blue-200'}`}
-                             >
-                                {getSourceIcon(src as any)}
-                                <span className="text-[7px] font-black uppercase">{src}</span>
-                             </button>
-                          ))}
-                       </div>
-                    </div>
-                    
-                    <div className="col-span-2">
-                       <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">عنوان المشكل</label>
-                       <input required className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-blue-500" placeholder="مثال: عطل في جهاز الربط" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
-                    </div>
-                 </div>
-                 <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest">وصف التفاصيل</label>
-                    <textarea required rows={4} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold resize-none shadow-inner" placeholder="اكتب تفاصيل المشكل للتقني..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
-                 </div>
-                 <button 
-                   type="submit" 
-                   disabled={isAiAnalyzing}
-                   className="w-full bg-blue-600 text-white font-black py-5 rounded-3xl shadow-xl flex items-center justify-center gap-3 hover:bg-blue-700 transition-all uppercase tracking-widest text-xs"
-                 >
-                    {isAiAnalyzing ? <Loader2 className="animate-spin" /> : <Zap size={18} />}
-                    {isAiAnalyzing ? 'جاري التحليل والبث...' : 'تثبيت وبدء البث العام'}
-                 </button>
-              </form>
-           </div>
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[3rem] w-full max-w-2xl max-h-[90vh] shadow-2xl overflow-hidden animate-in zoom-in duration-300 flex flex-col relative">
+             
+             {/* Modal Header (Fixed) */}
+             <div className="p-8 bg-blue-600 text-white flex justify-between items-center relative overflow-hidden shrink-0">
+                <div className="relative z-10">
+                  <h3 className="text-2xl font-black">{editingIssue ? 'تعديل بيانات التذكرة' : 'فتح تذكرة دعم جديدة'}</h3>
+                  <p className="text-blue-100 text-[10px] font-black uppercase tracking-widest mt-1">GIM-TECH SUPPORT PORTAL</p>
+                </div>
+                <button onClick={resetForm} className="relative z-10 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white hover:text-red-600 transition-all"><X size={24} /></button>
+                <ShieldAlert className="absolute -right-10 -bottom-10 w-48 h-48 text-white/5 rotate-12" />
+             </div>
+             
+             {/* Scrollable Form Body */}
+             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-6 custom-scrollbar" dir="rtl">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                   <div className="md:col-span-2">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 mr-2">اختيار الزبون المتضرر</label>
+                      <select required className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none" value={formData.clientId} onChange={e => setFormData({...formData, clientId: e.target.value})}>
+                         <option value="">-- اختر الزبون --</option>
+                         {state.clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                   </div>
+                   <div className="md:col-span-2">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 mr-2">عنوان المشكلة</label>
+                      <input required className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} placeholder="مثال: عطل في كاميرا المدخل الرئيسي" />
+                   </div>
+                   <div className="md:col-span-2">
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 mr-2">الوصف التقني المفصل</label>
+                      <textarea required className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold resize-none h-32 focus:ring-2 focus:ring-blue-500 outline-none" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} placeholder="اشرح تفاصيل المشكلة..." />
+                   </div>
+                   <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 mr-2">مستوى الأولوية</label>
+                      <select className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" value={formData.priority} onChange={e => setFormData({...formData, priority: e.target.value as any})}>
+                         <option value="Low">منخفضة</option>
+                         <option value="Medium">متوسطة</option>
+                         <option value="High">عالية (طارئة)</option>
+                      </select>
+                   </div>
+                   <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 mr-2">فئة الخدمة</label>
+                      <select className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as GIMServiceCategory})}>
+                         <option value="Security & Networks">كاميرات وشبكات</option>
+                         <option value="Web & Apps">برمجيات ومواقع</option>
+                         <option value="Smart Home">منزل ذكي</option>
+                         <option value="GIM Store">المتجر</option>
+                      </select>
+                   </div>
+                </div>
+                
+                {/* Submit Button (At the bottom of form content) */}
+                <button type="submit" className="w-full bg-slate-900 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-blue-600 transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-3 mt-4">
+                   <Save size={20} /> حفظ التذكرة وبدء المعالجة
+                </button>
+             </form>
+          </div>
         </div>
       )}
     </div>

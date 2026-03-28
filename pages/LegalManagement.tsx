@@ -1,6 +1,7 @@
-
 import React, { useState } from 'react';
-import { AppState, DocType, Document, LegalNotice } from '../types';
+import { AppState, DocType, Document } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { createRecord } from '../db';
 // Fix: Removed non-existent UserShield icon and replaced it with ShieldCheck
 import { 
   Scale, ShieldCheck, Archive, FileText, Lock, 
@@ -16,6 +17,7 @@ interface LegalManagementProps {
 }
 
 const LegalManagement: React.FC<LegalManagementProps> = ({ state, updateState }) => {
+  const { user: authUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'archive' | 'compliance' | 'contracts'>('archive');
   const [search, setSearch] = useState('');
 
@@ -33,16 +35,15 @@ const LegalManagement: React.FC<LegalManagementProps> = ({ state, updateState })
        updateState(prev => ({
           ...prev,
           documents: prev.documents.map(d => d.id === docId ? { ...d, status: 'Archived' } : d),
-          activityLogs: [{
-             id: crypto.randomUUID(),
-             userId: 'admin',
-             username: 'admin',
+          activityLogs: [createRecord({
+             userId: authUser?.id || 'admin',
+             username: authUser?.fullName || 'admin',
              action: 'ARCHIVE_DOC',
              module: 'LEGAL',
              timestamp: new Date().toISOString(),
              details: `تمت أرشفة الوثيقة رقم ${state.documents.find(dx => dx.id === docId)?.number}`,
              severity: 'Info'
-          }, ...(prev.activityLogs || [])]
+          }), ...(prev.activityLogs || [])]
        }));
     }
   };

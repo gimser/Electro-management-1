@@ -1,198 +1,238 @@
 
+// Domain types for GIM-NET TECH System - Enterprise Edition (SARL/SaaS)
+
+// --- ARCHITECTURE CORE: IDENTITY & SYNC ---
+// This interface ensures every record is ready for Cloud Migration (Supabase/Firebase)
+export interface BaseEntity {
+  id: string;           // record_uuid (Universally Unique)
+  companyId: string;    // Multi-tenancy: Who owns this data?
+  deviceId: string;     // Audit: Which device created this?
+  userId?: string;      // Audit: Which user created this?
+  createdAt: string;    // ISO Timestamp
+  updatedAt: string;    // ISO Timestamp
+  syncStatus: 'synced' | 'pending' | 'error';
+  version: number;      // Optimistic Locking
+}
+
 export enum DocType {
   DEVIS = 'DEVIS',
   FACTURE = 'FACTURE',
+  INTERVENTION_LOG = 'INTERVENTION_LOG',
+  WARRANTY = 'WARRANTY',
+  ACHAT = 'ACHAT',
   CONTRAT = 'CONTRAT',
   GARANTIE = 'GARANTIE',
   RAPPORT = 'RAPPORT',
-  RECU = 'RECU',
   NDA = 'NDA',
-  LEGAL_NOTICE = 'LEGAL_NOTICE',
-  ACHAT = 'ACHAT'
+  TICKET = 'TICKET', 
+  SECURITY_REPORT = 'SECURITY_REPORT'
 }
 
-export type UserRole = 'SuperAdmin' | 'Manager' | 'Supervisor' | 'Technician' | 'Marketing' | 'Office';
-export type ClientType = 'Individual' | 'Company';
+export type ClientType = 'Individual' | 'Company' | 'Government';
+export type UserRole = 'CEO' | 'Manager' | 'Accountant' | 'Technician' | 'Sales';
+export type IssueStatus = 'Open' | 'Analyzing' | 'Assigned' | 'In-Progress' | 'Resolved' | 'Re-opened' | 'Cancelled' | 'Diagnosed';
 export type IssueSource = 'WhatsApp' | 'Facebook' | 'Instagram' | 'Website' | 'Phone' | 'Direct';
-export type IssueStatus = 'Open' | 'Analyzing' | 'Assigned' | 'In-Progress' | 'Diagnosed' | 'Resolved' | 'Re-opened' | 'Cancelled';
-export type VisitStatus = 'Planned' | 'On-Site' | 'Completed' | 'Cancelled' | 'Waiting-Approval';
-export type MovementType = 'IN' | 'OUT' | 'ADJUSTMENT' | 'RETURN';
-export type MarketingChannel = 'Facebook' | 'Instagram' | 'WhatsApp' | 'Referral' | 'TikTok' | 'Direct' | 'Website' | 'Google Ads';
+export type GIMServiceCategory = 'صيانة الأجهزة' | 'الشبكات والكاميرات' | 'أنظمة الإنذار' | 'خدمات أخرى' | 'Security & Networks' | 'Web & Apps' | 'Smart Home' | 'GIM Store' | 'Consulting' | 'Cyber Security';
 
-export type LeadStatus = 'New' | 'Contacted' | 'Qualified' | 'Converted' | 'Lost';
-
-export type AutomationTrigger = 'OnNewLead' | 'OnUrgentIssue' | 'OnNewTask' | 'OnLowStock';
-
-export type GIMServiceCategory = 'Security & Networks' | 'Web & Apps' | 'Smart Home' | 'GIM Store';
-
-export interface TechnicalDiagnosis {
-  symptoms: string;
-  rootCause: string;
-  recommendation: string;
-  diagnosedBy: string;
-  date: string;
-  voiceTranscript?: string; 
-}
-
-export interface AutonomousDecision {
+// --- Mcommunication Governance Types ---
+export interface SocialPost {
   id: string;
-  triggerEvent: string;
-  actionTaken: string;
-  confidenceScore: number;
-  logicPath: string;
+  authorId: string;
+  authorName: string;
+  content: string;
+  mediaUrl?: string;
   timestamp: string;
-  status: 'Executed' | 'Failed' | 'Intervened';
+  reportsCount: number;
+  riskScore: number; // 0-100 (AI calculated)
+  status: 'Live' | 'Flagged' | 'Shadowbanned' | 'Removed';
+  viralityIndex: number;
 }
 
-export interface WorkingDay {
-  day: string;
-  open: string;
-  close: string;
-  isClosed: boolean;
+export interface ModerationAction {
+  id: string;
+  postId: string;
+  moderatorId: string;
+  action: 'APPROVE' | 'REMOVE' | 'SHADOWBAN' | 'WARNING';
+  reason: string;
+  timestamp: string;
 }
 
-export interface NotificationConfig {
-  email: boolean;
-  whatsapp: boolean;
-  system: boolean;
-  lowStockAlert: boolean;
-  newLeadAlert: boolean;
-  paymentReminder: boolean;
+export interface AlgoParameter {
+  id: string;
+  key: string;
+  label: string;
+  value: number; // 0-100
+  description: string;
+  impactZone: 'Feed' | 'Notifications' | 'Visibility';
+}
+
+// --- Cyber Security & Zero Trust ---
+export type RiskLevel = 'Critical' | 'High' | 'Medium' | 'Low' | 'Safe';
+
+export interface Vulnerability {
+  id: string;
+  cve?: string;
+  title: string;
+  riskLevel: RiskLevel;
+  status: 'Open' | 'Mitigated' | 'False Positive';
+  remediation: string;
+}
+
+export interface ZeroTrustStatus {
+  identityScore: number;
+  networkScore: number;
+  endpointScore: number;
+  overallScore: number;
+  lastAuditDate: string;
+}
+
+export interface SecurityAudit extends BaseEntity {
+  clientId: string;
+  date: string;
+  technician: string;
+  scope: string;
+  zeroTrustStatus: ZeroTrustStatus;
+  vulnerabilities: Vulnerability[];
+  reportUrl?: string;
+}
+
+// --- NOC & Networks ---
+export type DeviceStatus = 'Online' | 'Offline' | 'Warning' | 'Predictive-Failure' | 'Isolating' | 'Compromised';
+export type DeviceType = 'Router' | 'Switch' | 'AccessPoint' | 'IP-Camera' | 'Server' | 'NVR' | 'UPS' | 'Firewall' | 'IoT-Gateway';
+
+export interface NetworkDevice extends BaseEntity {
+  clientId: string;
+  name: string;
+  ip: string;
+  type: DeviceType;
+  status: DeviceStatus;
+  uptime: number; 
+  cpuLoad: number;
+  temp: number;
+  healthScore: number;
+  failureRisk: number;
+  lastSeen: string;
+  macAddress: string;
+  modelName: string;
+  firmwareVersion: string;
+  notes: string;
+  segment?: string;
+  isIsolated?: boolean;
+}
+
+// --- COMPUTER WORKSHOP ---
+export type ComputerType = 'Laptop' | 'Desktop' | 'Server' | 'Workstation';
+export interface ComputerAsset extends BaseEntity {
+  clientId: string;
+  name: string;
+  serialNumber: string;
+  type: ComputerType;
+  specs: {
+    cpu: string;
+    ram: string;
+    disk: string;
+    gpu: string;
+  };
+  health: {
+    status: 'Healthy' | 'Warning' | 'Critical';
+    diskLife: number;
+    batteryHealth?: number;
+    cpuTemp: number;
+    lastBootTime: string;
+    bluescreenCount: number;
+  };
+  reportedIssue?: string;
+  agentInstalled: boolean;
+  lastSync: string;
+  prediction?: string;
+}
+
+// --- SMART HOME OS ---
+export type IoTProtocol = 'WiFi' | 'Zigbee' | 'Z-Wave' | 'MQTT' | 'Matter' | 'RTSP';
+export type IoTDeviceType = 'Light' | 'AC' | 'Lock' | 'Camera' | 'Sensor' | 'Outlet' | 'Thermostat';
+
+export interface SmartRoom extends BaseEntity {
+  name: string;
+  type: 'Living' | 'Bedroom' | 'Kitchen' | 'Office' | 'Outdoor';
+  floor: number;
+  image?: string;
+  temperature: number;
+  humidity: number;
+  powerUsage: number;
+}
+
+export interface IoTDevice extends BaseEntity {
+  clientId?: string;
+  roomId: string;
+  name: string;
+  type: IoTDeviceType;
+  protocol: IoTProtocol;
+  ipAddress: string;
+  macAddress: string;
+  port: number;
+  status: 'Online' | 'Offline' | 'Updating' | 'Error';
+  state: any;
+  firmware: string;
+  lastPing: number;
+  powerConsumption: number;
+  batteryLevel?: number;
+  networkSegment?: 'Main' | 'Guest' | 'IoT_Isolated';
+}
+
+export interface AutomationScenario extends BaseEntity {
+  name: string;
+  active: boolean;
+  trigger: string;
+  action: string;
+  lastRun: string;
 }
 
 export interface CommunicationLog {
   id: string;
-  date: string;
-  type: 'Call' | 'WhatsApp' | 'Email' | 'Meeting' | 'Note';
-  summary: string;
-  agent: string;
-}
-
-export interface Visit {
-  id: string;
-  clientId: string;
-  technicianId: string;
-  taskId?: string;
-  date: string;
-  scheduledTime: string;
-  checkInTime?: string;
-  checkOutTime?: string;
-  actualDurationMinutes?: number;
-  status: VisitStatus;
-  notes?: string;
-  linkedInvoiceId?: string;
-  linkedDevisId?: string; 
-  isBilled: boolean;
-  potentialPoints?: number; // نقاط محتملة للمهمة
-}
-
-export interface StockMovement {
-  id: string;
-  inventoryId: string;
-  type: MovementType;
-  quantity: number;
-  date: string;
-  reason: string;
-  performedBy: string;
-  referenceId?: string;
-}
-
-export interface AIPrediction {
-  id: string;
-  targetId: string;
-  type: 'MaintenanceNeeded' | 'ChurnRisk' | 'InventoryShortage' | 'RevenueDrop';
-  probability: number;
-  suggestedAction: string;
-  reasoning: string;
   timestamp: string;
-  status: 'Pending' | 'Applied' | 'Ignored';
-}
-
-export interface AIDecision {
-  id: string;
-  action: string;
-  impact: 'High' | 'Medium' | 'Low';
-  confidence: number;
-  logic: string;
-  timestamp: string;
-  outcome?: string;
-}
-
-export interface AppUser {
-  id: string;
-  username: string;
-  fullName: string;
-  email: string;
-  password?: string; 
-  role: UserRole;
-  status: 'Active' | 'Disabled';
-  lastLogin?: string;
-  createdAt: string;
-}
-
-export interface ActivityLog {
-  id: string;
-  userId: string;
-  username: string;
-  action: string;
-  module: string;
-  timestamp: string;
-  severity: 'Info' | 'Warning' | 'Critical';
+  type: 'Call' | 'Message' | 'Email';
   details: string;
 }
 
-export interface Client {
-  id: string;
+export interface Client extends BaseEntity {
   name: string;
   clientType: ClientType;
-  ice?: string; 
   phone: string;
-  email: string;
   address: string;
   city: string;
-  createdAt: string;
-  category?: 'Standard' | 'VIP' | 'Wholesale';
+  lat: number;
+  lng: number;
+  isRedFlagged?: boolean;
+  ice?: string;
+  email?: string;
+  category?: 'Standard' | 'VIP' | 'Corporate';
+  serviceCategory?: GIMServiceCategory;
   loyaltyScore?: number;
   internalNotes?: string;
   communicationHistory?: CommunicationLog[];
-  leadId?: string;
-  acquisitionSource?: string;
-  isRedFlagged?: boolean; 
-  debtLevel?: 'Normal' | 'Nudge' | 'Warning' | 'Blocked'; 
+  managerName?: string;
+  serviceSize?: 'صغير' | 'متوسط' | 'كبير';
+  description?: string;
+  status?: 'جديد' | 'Active' | 'Inactive' | 'Archived';
 }
 
-export interface InventoryItem {
-  id: string;
-  name: string;
-  sku?: string;
-  category: GIMServiceCategory;
-  quantity: number;
-  unit: string;
-  minQuantity: number;
-  purchasePrice: number; 
-  sellingPrice: number;  
-}
-
-export interface Document {
-  id: string;
-  clientId: string;
-  type: DocType;
-  number: string;
-  date: string;
-  dueDate?: string;
-  items: LineItem[];
-  subtotal: number;
-  tva: number;
-  total: number;
-  paidAmount?: number;
-  status: 'Draft' | 'Sent' | 'Paid' | 'Cancelled' | 'Partially-Paid' | 'Archived' | 'Accepted' | 'Rejected';
-  notes?: string;
-  aiSuggestedPrice?: boolean;
-  interventionDetails?: string;
-  warrantyPeriod?: string;
-  autoAcceptedAt?: string; 
-  rejectionReason?: string; 
-  providerName?: string;
+export interface AEIdentity {
+  companyName: string;
+  rc: string;
+  ice: string;
+  if: string;
+  tp: string;
+  cnss?: string;
+  address: string;
+  phone: string;
+  email: string;
+  bankRib: string;
+  capital?: number;
+  fullName?: string;
+  aeNumber?: string;
+  cin?: string;
+  logo?: string;
+  stamp?: string;
 }
 
 export interface LineItem {
@@ -204,92 +244,64 @@ export interface LineItem {
   total: number;
 }
 
-export interface Task {
-  id: string;
+export interface Document extends BaseEntity {
+  clientId: string;
+  type: DocType;
+  number: string;
+  date: string;
+  dueDate?: string;
+  items: LineItem[];
+  subtotal: number;
+  tvaAmount: number;
+  total: number;
+  status: 'Draft' | 'Sent' | 'Paid' | 'Partially-Paid' | 'Cancelled' | 'Archived' | 'Accepted' | 'Rejected';
+  notes?: string;
+  paidAmount?: number;
+  providerName?: string;
+  interventionDetails?: string;
+  warrantyPeriod?: string;
+  rejectionReason?: string;
+  autoAcceptedAt?: string;
+}
+
+export interface Expense extends BaseEntity {
+  description: string;
+  amount: number;
+  tvaReclaimable?: number;
+  date: string;
+  category: 'Materials' | 'Rent' | 'Salary' | 'Transport' | 'Other' | 'Taxes';
+}
+
+export interface InventoryItem extends BaseEntity {
+  name: string;
+  sku: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  purchasePrice: number;
+  sellingPrice: number;
+  minStock: number;
+}
+
+export interface Task extends BaseEntity {
   title: string;
   clientId: string;
   date: string;
   time: string;
   technician: string;
-  status: 'Pending' | 'In-Progress' | 'Completed';
-  description: string;
-  actualStartTime?: string;
-  actualEndTime?: string;
-  actualDurationMinutes?: number;
-  autonomousId?: string; 
+  status: 'Pending' | 'In-Progress' | 'Completed' | 'Cancelled';
+  description?: string;
 }
 
-export interface IssueComment {
-  id: string;
-  author: string;
-  text: string;
-  timestamp: string;
+export interface XPEntry {
+    id: string;
+    date: string;
+    amount: number;
+    reason: string;
+    type: 'GAIN' | 'PENALTY';
 }
 
-export interface CustomerIssue {
-  id: string;
-  clientId: string;
-  title: string;
-  description: string;
-  priority: 'Low' | 'Medium' | 'High';
-  status: IssueStatus;
-  source: IssueSource;
-  category?: GIMServiceCategory | 'General';
-  createdAt: string;
-  aiInsights?: string;
-  aiSuggestedSolution?: string;
-  comments?: IssueComment[];
-  mediaUrls?: string[];
-  diagnosis?: TechnicalDiagnosis; 
-  taskId?: string; 
-}
-
-export interface AutomationLog {
-  id: string;
-  timestamp: string;
-  action: string;
-  status: 'success' | 'failed';
-  details: string;
-}
-
-export interface AutomationRule {
-  id: string;
-  trigger: AutomationTrigger; 
-  action: string;
-  template: string;
-  active: boolean;
-}
-
-export interface MarketingCampaign {
-  id: string;
-  name: string;
-  platform: string;
-  status: 'Active' | 'Paused' | 'Completed';
-  budget: number;
-  spent: number;
-  startDate: string;
-  endDate?: string;
-  leadsCount: number;
-  conversionsCount: number;
-}
-
-export interface Lead {
-  id: string;
-  name: string;
-  phone: string;
-  interest: string;
-  source: MarketingChannel;
-  status: LeadStatus; 
-  priority: string;
-  createdAt: string;
-  conversionProbability?: number;
-  category?: string; 
-  notes?: string[]; 
-  campaignId?: string; 
-}
-
-export interface Technician {
-  id: string;
+export interface Technician extends BaseEntity {
   name: string;
   phone: string;
   specialty: GIMServiceCategory;
@@ -297,78 +309,182 @@ export interface Technician {
   joinDate: string;
   maxDailyTasks: number;
   performanceRating: number;
-  bonusPoints: number; 
-  level?: number; // مستوى التقني
-  exp?: number; // نقاط الخبرة التراكمية
-  badges?: string[]; // أوسمة محققة
+  bonusPoints: number;
+  level: number;
+  exp: number;
+  badges: string[];
   weeklySchedule?: Record<string, string[]>;
-  currentLocation?: { lat: number, lng: number }; 
+  xpHistory?: XPEntry[];
 }
 
-export interface Expense {
-  id: string;
-  description: string;
-  amount: number;
-  date: string;
-  category: 'Materials' | 'Rent' | 'Salary' | 'Transport' | 'Other';
+export type LeadStatus = 'New' | 'Contacted' | 'Qualified' | 'Converted' | 'Lost';
+export type MarketingChannel = 'Facebook' | 'Instagram' | 'WhatsApp' | 'Referral' | 'TikTok' | 'Direct' | 'Website' | 'Google Ads';
+
+export interface Lead extends BaseEntity {
+  name: string;
+  phone: string;
+  interest: string;
+  source: MarketingChannel;
+  status: LeadStatus;
+  priority: 'LOW' | 'NORMAL' | 'HIGH';
+  category: string;
+  notes: string[];
+  campaignId?: string;
+  conversionProbability: number;
+  clientType?: ClientType;
+  managerName?: string;
+  serviceSize?: 'صغير' | 'متوسط' | 'كبير';
+  description?: string;
+  city?: string;
+  email?: string;
 }
 
-export interface ServicePrice {
-  id: string;
-  code?: string;
+export type AutomationTrigger = 'OnNewLead' | 'OnUrgentIssue' | 'OnNewTask' | 'OnLowStock';
+
+export interface AutomationRule extends BaseEntity {
+  trigger: AutomationTrigger;
+  action: 'Template';
+  template: string;
+  active: boolean;
+}
+
+export interface ServicePrice extends BaseEntity {
+  code: string;
   serviceName: string;
   category: GIMServiceCategory;
   price: number;
   description: string;
 }
 
-export interface LegalNotice {
-  id: string;
+export type MissionPhase = 
+  | 'DISPATCHED' | 'TRAVELING' | 'ON_SITE' | 'DIAGNOSIS' | 'APPROVAL_WAIT' | 'WORKING' | 'VERIFICATION' | 'COMPLETED' | 'DIAGNOSIS_BILLING';
+
+export interface ProofOfWork {
+  photoBefore?: string;
+  photoAfter?: string;
+  gpsArrival?: { lat: number; lng: number };
+  gpsDeparture?: { lat: number; lng: number };
+  startTime?: string;
+  endTime?: string;
+  clientSignature?: string;
+  technicianNotes?: string;
+  technicianName?: string;
+  diagnosisFee?: number; // Fee charged if repair is rejected
+}
+
+export interface Visit extends BaseEntity {
+  taskId: string;
+  clientId: string;
+  technicianId: string;
+  status: 'Planned' | 'In-Route' | 'On-Site' | 'Waiting-Approval' | 'Completed' | 'Cancelled';
+  phase?: MissionPhase; 
+  proofOfWork?: ProofOfWork;
+  notes?: string;
+  checkInTime?: string;
+  linkedDevisId?: string;
+}
+
+export interface AutonomousDecision extends BaseEntity {
+  triggerEvent: string;
+  actionTaken: string;
+  confidenceScore: number;
+  logicPath: string;
+  timestamp: string;
+  status: 'Executed' | 'Failed';
+}
+
+export interface TechnicalDiagnosis {
+    symptoms: string;
+    rootCause: string;
+    recommendation: string;
+    diagnosedBy: string;
+    date: string;
+    requiredParts?: {
+      inventoryId: string;
+      name: string;
+      quantity: number;
+      price: number;
+    }[];
+}
+
+export interface CustomerIssue extends BaseEntity {
+  clientId: string;
+  assetId?: string;
   title: string;
-  content: string;
-  version: string;
-  lastUpdated: string;
-  active: boolean;
+  description: string;
+  priority: 'Low' | 'Medium' | 'High';
+  status: IssueStatus;
+  source: IssueSource;
+  category: GIMServiceCategory;
+  systemAnalysis?: string;
+  logicSuggestedSolution?: string;
+  mediaUrls?: string[];
+  externalCondition?: string;
+  customerSignature?: string;
+  laborTime?: number;
+  workStatus?: 'Pending' | 'Working' | 'Paused' | 'Stopped';
+  lastStartedAt?: string;
+  pauseReason?: string;
+  comments?: any[];
+  diagnosis?: TechnicalDiagnosis;
+}
+
+export interface ActivityLog extends BaseEntity {
+  username: string;
+  action: string;
+  module: 'CLIENT' | 'INVENTORY' | 'SCHEDULER' | 'TECHNICAL' | 'LEGAL' | 'NOC' | 'ADVISOR' | 'MARKETING' | 'FINANCE' | 'HR' | 'SMART_HOME' | 'POS' | 'WORKSHOP' | 'SECURITY' | 'SYS' | 'GOVERNANCE';
+  timestamp: string;
+  details: string;
+  severity: 'Info' | 'Warning' | 'Critical';
+  status?: 'success' | 'failed';
+}
+
+export interface AppUser extends BaseEntity {
+  username: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  role: UserRole;
+  status: 'Active' | 'Inactive';
+  password?: string;
+}
+
+export interface StockMovement extends BaseEntity {
+  inventoryId: string;
+  type: 'IN' | 'OUT';
+  quantity: number;
+  date: string;
+  reason: string;
+  performedBy: string;
+  referenceId?: string;
+}
+
+export interface MetaIntegration {
+  whatsappEnabled: boolean;
+  facebookEnabled: boolean;
+  instagramEnabled: boolean;
+  verifyToken: string;
+  accessToken: string;
+  phoneNumberId: string;
 }
 
 export interface CompanySettings {
-  name: string;
-  address: string;
+  fullName: string;
   phone: string;
   email: string;
-  rc: string;
-  if: string;
+  address: string;
   ice: string;
-  bankInfo: string;
-  logoUrl?: string;
-  stampUrl?: string;
-  language: 'ar' | 'fr';
-  currency: 'MAD' | 'USD' | 'EUR';
-  userRole: UserRole;
-  aiAutomationLevel: number;
-  isFullyAutonomous: boolean; 
-  aiFeaturesEnabled: {
-    autoPriority: boolean;
-    predictiveStock: boolean;
-    smartInvoicing: boolean;
-    clientClassification: boolean;
-    securityAlerts: boolean;
-  };
-  workingHours: WorkingDay[];
-  notifications: NotificationConfig;
+  rc?: string;
   integrations: {
-    facebookConnected: boolean;
-    whatsappConnected: boolean;
-    webhookSecret?: string;
-    websiteUrl?: string;
     facebookPageId?: string;
     facebookAccessToken?: string;
     instagramId?: string;
-    whatsappPhoneId?: string;
-    whatsappAccessToken?: string;
-    apiKey: string;
-    externalEndpoint: string;
+    phoneNumberId?: string;
+    accessToken?: string;
+    websiteUrl?: string;
+    webhookSecret?: string;
   };
+  metaConfig?: MetaIntegration;
   legal?: {
     privacyPolicy: string;
     termsOfService: string;
@@ -376,35 +492,68 @@ export interface CompanySettings {
   };
 }
 
-export interface AppState {
+export interface MarketingCampaign extends BaseEntity {
+  name: string;
+  platform: MarketingChannel;
+  status: 'Active' | 'Paused' | 'Ended';
+  budget: number;
+  spent: number;
+  startDate: string;
+  endDate: string;
+  leadsCount: number;
+  conversionsCount: number;
+}
+
+// --- ARCHITECTURAL SPLIT: Core, Ops, UI ---
+
+export interface CoreState {
+  identity: AEIdentity;
   users: AppUser[];
-  activityLogs: ActivityLog[];
-  clients: Client[];
-  technicians: Technician[];
+  settings: {
+    language: 'ar' | 'fr';
+    legal: {
+      privacyPolicy: string;
+      termsOfService: string;
+      warrantyTerms: string;
+    };
+    metaConfig?: MetaIntegration;
+    integrations?: CompanySettings['integrations'];
+    isProduction?: boolean; // Production mode flag
+  };
+  // Financial Core
   documents: Document[];
   expenses: Expense[];
   inventory: InventoryItem[];
-  stockMovements: StockMovement[]; 
-  tasks: Task[];
-  leads: Lead[];
-  campaigns: MarketingCampaign[];
-  customerIssues: CustomerIssue[];
   servicePrices: ServicePrice[];
-  automationRules: AutomationRule[];
-  automationLogs: AutomationLog[];
-  aiDecisions: AIDecision[]; 
-  aiPredictions: AIPrediction[]; 
-  autonomousDecisions: AutonomousDecision[]; 
-  settings: CompanySettings;
-  visits: Visit[];
-  legalNotices: LegalNotice[];
+  stockMovements: StockMovement[];
 }
 
-export enum Type {
-  OBJECT = 'OBJECT',
-  ARRAY = 'ARRAY',
-  STRING = 'STRING',
-  NUMBER = 'NUMBER',
-  INTEGER = 'INTEGER',
-  BOOLEAN = 'BOOLEAN'
+export interface OpsState {
+  // CRM & Field
+  clients: Client[];
+  tasks: Task[];
+  visits: Visit[];
+  technicians: Technician[];
+  customerIssues: CustomerIssue[];
+  // Modules
+  networkDevices: NetworkDevice[];
+  computerAssets: ComputerAsset[];
+  // Smart Home
+  smartRooms: SmartRoom[];
+  iotDevices: IoTDevice[];
+  automationScenarios: AutomationScenario[];
+  // Security
+  securityAudits: SecurityAudit[];
+  // Growth & Auto
+  leads: Lead[];
+  campaigns: MarketingCampaign[];
+  automationRules: AutomationRule[];
+  autonomousDecisions: AutonomousDecision[];
 }
+
+export interface UIState {
+  activityLogs: ActivityLog[];
+  automationLogs: any[];
+}
+
+export type AppState = CoreState & OpsState & UIState;

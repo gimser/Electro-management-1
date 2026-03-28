@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { CompanySettings } from '../types';
+import { AppState } from '../types';
 import { 
   Share2, 
   Facebook, 
@@ -16,12 +16,12 @@ import {
 } from 'lucide-react';
 
 interface SocialMediaSettingsProps {
-  settings: CompanySettings;
-  updateSettings: (settings: CompanySettings) => void;
+  settings: AppState['settings'];
+  updateSettings: (settings: AppState['settings']) => void;
 }
 
 const SocialMediaSettings: React.FC<SocialMediaSettingsProps> = ({ settings, updateSettings }) => {
-  const [formData, setFormData] = useState(settings.integrations);
+  const [formData, setFormData] = useState(settings.integrations || {});
   const [isSaved, setIsSaved] = useState(false);
 
   const handleSave = () => {
@@ -117,13 +117,13 @@ const SocialMediaSettings: React.FC<SocialMediaSettingsProps> = ({ settings, upd
            <div className="space-y-4">
               <div>
                  <label className="block text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">Phone Number ID</label>
-                 <input className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-2 focus:ring-green-500 outline-none" placeholder="112233445566..." value={formData.whatsappPhoneId || ''} onChange={e => setFormData({...formData, whatsappPhoneId: e.target.value})} />
+                 <input className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-2 focus:ring-green-500 outline-none" placeholder="112233445566..." value={formData.phoneNumberId || ''} onChange={e => setFormData({...formData, phoneNumberId: e.target.value})} />
               </div>
               <div>
                  <label className="block text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">Permanent Token</label>
                  <div className="relative">
                     <Key className="absolute left-4 top-3.5 text-slate-300" size={16} />
-                    <input type="password" className="w-full pr-5 pl-12 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-2 focus:ring-green-500 outline-none" value={formData.whatsappAccessToken || ''} onChange={e => setFormData({...formData, whatsappAccessToken: e.target.value})} />
+                    <input type="password" className="w-full pr-5 pl-12 py-3 bg-slate-50 border border-slate-100 rounded-2xl font-bold focus:ring-2 focus:ring-green-500 outline-none" value={formData.accessToken || ''} onChange={e => setFormData({...formData, accessToken: e.target.value})} />
                  </div>
               </div>
            </div>

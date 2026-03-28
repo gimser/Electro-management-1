@@ -1,28 +1,34 @@
-
 import React, { useState } from 'react';
 import { AppState, Document, DocType, LineItem, InventoryItem, StockMovement } from '../types';
-// Added Zap to the imports from lucide-react
+import { useAuth } from '../context/AuthContext';
 import { 
   Truck, Plus, Search, Trash2, Save, X, 
   Package, ShoppingBag, DollarSign, Calendar, 
   ArrowUpRight, History, CheckCircle2, AlertCircle,
-  PlusCircle, Calculator, FileText, Zap
+  PlusCircle, Calculator, FileText, Zap, Edit3
 } from 'lucide-react';
-import { generateSmartDocNumber } from '../db';
+import { generateSmartDocNumber, createRecord } from '../db';
 
 interface PurchaseInvoicesProps {
   state: AppState;
   updateState: (updater: (prev: AppState) => AppState) => void;
 }
 
+// Extended interface for local state to handle selling price and new items
+interface PurchaseLineItem extends LineItem {
+  sellingPrice?: number; // New field for inventory update
+  isManual?: boolean;    // Flag to identify new items
+}
+
 const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ state, updateState }) => {
+  const { user: authUser } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
   
   const [formData, setFormData] = useState({
     providerName: '',
     date: new Date().toISOString().split('T')[0],
-    items: [] as LineItem[],
+    items: [] as PurchaseLineItem[],
     notes: ''
   });
 
@@ -30,30 +36,50 @@ const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ state, updateState 
 
   const purchaseInvoices = state.documents.filter(d => d.type === DocType.ACHAT);
 
+  // 1. Add Existing Item from Inventory
   const addItemToInvoice = (item: InventoryItem) => {
-    const newLineItem: LineItem = {
+    const newLineItem: PurchaseLineItem = {
       id: crypto.randomUUID(),
       inventoryId: item.id,
       description: item.name,
       quantity: 1,
       unitPrice: item.purchasePrice,
-      total: item.purchasePrice
+      sellingPrice: item.sellingPrice, // Load current selling price
+      total: item.purchasePrice,
+      isManual: false
     };
     setFormData(prev => ({ ...prev, items: [...prev.items, newLineItem] }));
     setShowInventoryPicker(false);
   };
 
-  const updateItemQty = (id: string, qty: number) => {
-    setFormData(prev => ({
-      ...prev,
-      items: prev.items.map(i => i.id === id ? { ...i, quantity: qty, total: qty * i.unitPrice } : i)
-    }));
+  // 2. Add Manual Item (New Product)
+  const addManualItem = () => {
+    const newLineItem: PurchaseLineItem = {
+      id: crypto.randomUUID(),
+      description: '', // Empty for user input
+      quantity: 1,
+      unitPrice: 0,
+      sellingPrice: 0,
+      total: 0,
+      isManual: true
+    };
+    setFormData(prev => ({ ...prev, items: [...prev.items, newLineItem] }));
   };
 
-  const updateItemPrice = (id: string, price: number) => {
+  const updateItem = (id: string, field: keyof PurchaseLineItem, value: any) => {
     setFormData(prev => ({
       ...prev,
-      items: prev.items.map(i => i.id === id ? { ...i, unitPrice: price, total: i.quantity * price } : i)
+      items: prev.items.map(i => {
+        if (i.id === id) {
+          const updated = { ...i, [field]: value };
+          // Recalculate total if qty or price changes
+          if (field === 'quantity' || field === 'unitPrice') {
+            updated.total = (updated.quantity || 0) * (updated.unitPrice || 0);
+          }
+          return updated;
+        }
+        return i;
+      })
     }));
   };
 
@@ -66,54 +92,83 @@ const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ state, updateState 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.items.length === 0) return alert('يرجى إضافة سلع للفاتورة');
+    if (formData.items.some(i => !i.description)) return alert('يرجى إدخال اسم السلعة لجميع الأسطر');
 
     const invoiceNumber = generateSmartDocNumber('PUR', purchaseInvoices.length);
-    const newDoc: Document = {
-      id: crypto.randomUUID(),
-      clientId: 'INTERNAL', // المشتريات داخلية
+    
+    // Clean items for the Document object (remove local extra fields if needed, but keeping them is safe)
+    const docItems: LineItem[] = formData.items.map(i => ({
+      id: i.id,
+      inventoryId: i.inventoryId,
+      description: i.description,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      total: i.total
+    }));
+
+    const newDoc = createRecord<Document>({
+      clientId: 'INTERNAL',
       providerName: formData.providerName,
       type: DocType.ACHAT,
       number: invoiceNumber,
       date: formData.date,
-      items: formData.items,
+      items: docItems,
       subtotal,
-      tva: 20,
-      total: subtotal * 1.2,
+      tvaAmount: 0,
+      total: subtotal,
       status: 'Paid',
       notes: formData.notes
-    };
+    });
 
-    // --- منطق الأتمتة المهندس (Engineered Automation) ---
+    // --- AUTOMATION LOGIC ---
     updateState(prev => {
       let updatedInventory = [...prev.inventory];
       let newMovements: StockMovement[] = [...prev.stockMovements];
+      let activityDetails: string[] = [];
 
       formData.items.forEach(item => {
-        if (item.inventoryId) {
-          // 1. تحديث الكمية وسعر الشراء في المخزن
+        if (item.inventoryId && !item.isManual) {
+          // A. Update Existing Item
           updatedInventory = updatedInventory.map(inv => {
             if (inv.id === item.inventoryId) {
               return { 
                 ...inv, 
                 quantity: inv.quantity + item.quantity,
-                purchasePrice: item.unitPrice // تحديث لآخر سعر شراء
+                purchasePrice: item.unitPrice, // Update Cost
+                sellingPrice: item.sellingPrice || inv.sellingPrice // Update Selling Price if provided
               };
             }
             return inv;
           });
-
-          // 2. إنشاء سجل حركة مخزن
-          newMovements.unshift({
-            id: crypto.randomUUID(),
-            inventoryId: item.inventoryId,
-            type: 'IN',
+        } else {
+          // B. Create New Item (From Manual Entry)
+          const newItem = createRecord<InventoryItem>({
+            name: item.description,
+            sku: `AUTO-${Date.now().toString().slice(-6)}-${Math.floor(Math.random()*100)}`,
+            category: 'General', // Default category
             quantity: item.quantity,
-            date: formData.date,
-            reason: `مشتريات من: ${formData.providerName}`,
-            performedBy: 'System-Auto',
-            referenceId: newDoc.id
+            unit: 'pcs',
+            purchasePrice: item.unitPrice,
+            sellingPrice: item.sellingPrice || (item.unitPrice * 1.3), // Default margin if 0
+            minStock: 5
           });
+          updatedInventory.push(newItem);
+          activityDetails.push(item.description);
+          
+          // Link the document item to this new inventory item for future reference
+          item.inventoryId = newItem.id; 
         }
+
+        // Create Stock Movement Log
+        newMovements.unshift(createRecord<StockMovement>({
+          inventoryId: item.inventoryId || 'UNKNOWN',
+          type: 'IN',
+          quantity: item.quantity,
+          date: formData.date,
+          reason: `مشتريات: ${formData.providerName}`,
+          performedBy: 'System-Auto',
+          referenceId: newDoc.id
+        }));
       });
 
       return {
@@ -121,19 +176,19 @@ const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ state, updateState 
         documents: [newDoc, ...prev.documents],
         inventory: updatedInventory,
         stockMovements: newMovements,
-        automationLogs: [{
-           id: crypto.randomUUID(),
-           timestamp: new Date().toISOString(),
+        automationLogs: [createRecord({
            action: 'PURCHASE_AUTO_STOCKING',
            status: 'success',
-           details: `تم إضافة سلع الفاتورة ${invoiceNumber} للمخزن آلياً وتحديث الأثمنة.`
-        }, ...(prev.automationLogs || [])]
+           details: `تم معالجة فاتورة الشراء ${invoiceNumber}. تم تحديث/إنشاء ${formData.items.length} أصناف في المخزن.`,
+           timestamp: new Date().toISOString(),
+           username: authUser?.fullName || 'System'
+        }), ...(prev.automationLogs || [])]
       };
     });
 
     setShowForm(false);
     setFormData({ providerName: '', date: new Date().toISOString().split('T')[0], items: [], notes: '' });
-    alert('تم حفظ الفاتورة وتغذية المخزن بنجاح!');
+    alert('تم حفظ الفاتورة وتحديث المخزن (وإضافة الأصناف الجديدة) بنجاح!');
   };
 
   return (
@@ -165,7 +220,6 @@ const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ state, updateState 
                <p className="text-[10px] font-black text-blue-300 uppercase tracking-widest mb-1">تغذية المخزن</p>
                <p className="text-xl font-black uppercase">الربط الآلي نشط</p>
             </div>
-            {/* Added Zap to the components */}
             <Zap className="text-amber-400 fill-amber-400" size={32} />
          </div>
       </div>
@@ -226,7 +280,7 @@ const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ state, updateState 
       {/* Modal: New Purchase Invoice Form */}
       {showForm && (
          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-            <div className="bg-white rounded-[3.5rem] w-full max-w-4xl max-h-[90vh] shadow-2xl overflow-hidden animate-in zoom-in duration-300 flex flex-col">
+            <div className="bg-white rounded-[3.5rem] w-full max-w-5xl max-h-[90vh] shadow-2xl overflow-hidden animate-in zoom-in duration-300 flex flex-col">
                <div className="p-8 bg-blue-900 text-white flex justify-between items-center shrink-0">
                   <div className="flex items-center gap-4">
                      <Truck size={28} className="text-blue-300" />
@@ -252,45 +306,80 @@ const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ state, updateState 
                         <h4 className="font-black text-slate-800 text-sm uppercase tracking-widest flex items-center gap-2">
                            <Package size={18} className="text-blue-600" /> السلع المشتراة
                         </h4>
-                        <button 
-                           type="button"
-                           onClick={() => setShowInventoryPicker(true)}
-                           className="bg-slate-900 text-white px-5 py-2 rounded-xl text-[10px] font-black flex items-center gap-2 hover:bg-blue-600 transition-all shadow-lg"
-                        >
-                           <PlusCircle size={16} /> اختيار من المخزن الحالي
-                        </button>
+                        <div className="flex gap-2">
+                            <button 
+                               type="button"
+                               onClick={addManualItem}
+                               className="bg-white border-2 border-slate-200 text-slate-700 px-5 py-2 rounded-xl text-[10px] font-black flex items-center gap-2 hover:bg-slate-100 transition-all"
+                            >
+                               <Edit3 size={14} /> إضافة سطر يدوي (جديد)
+                            </button>
+                            <button 
+                               type="button"
+                               onClick={() => setShowInventoryPicker(true)}
+                               className="bg-slate-900 text-white px-5 py-2 rounded-xl text-[10px] font-black flex items-center gap-2 hover:bg-blue-600 transition-all shadow-lg"
+                            >
+                               <PlusCircle size={16} /> اختيار من المخزن
+                            </button>
+                        </div>
                      </div>
                      <div className="p-0">
                         <table className="w-full text-right">
                            <thead>
                               <tr className="bg-slate-50/50 border-b border-slate-100 text-[9px] font-black text-slate-400 uppercase">
-                                 <th className="px-6 py-3">السلعة</th>
+                                 <th className="px-6 py-3 w-1/3">السلعة</th>
                                  <th className="px-6 py-3 text-center">الكمية</th>
-                                 <th className="px-6 py-3 text-center">ثمن الشراء HT</th>
-                                 <th className="px-6 py-3 text-left">المجموع</th>
-                                 <th className="w-16"></th>
+                                 <th className="px-6 py-3 text-center text-blue-600">ثمن الشراء HT</th>
+                                 <th className="px-6 py-3 text-center text-green-600">ثمن البيع (للمخزن)</th>
+                                 <th className="px-6 py-3 text-left">المجموع (HT)</th>
+                                 <th className="w-10"></th>
                               </tr>
                            </thead>
                            <tbody className="divide-y divide-slate-50">
                               {formData.items.map(item => (
                                  <tr key={item.id} className="text-sm font-bold text-slate-700">
-                                    <td className="px-6 py-4">{item.description}</td>
+                                    <td className="px-6 py-4">
+                                        {item.isManual ? (
+                                            <input 
+                                                type="text"
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold focus:border-blue-500 outline-none"
+                                                placeholder="اسم السلعة الجديدة..."
+                                                value={item.description}
+                                                onChange={e => updateItem(item.id, 'description', e.target.value)}
+                                            />
+                                        ) : (
+                                            <span className="flex items-center gap-2">
+                                                <Package size={14} className="text-slate-400"/> {item.description}
+                                            </span>
+                                        )}
+                                        {item.isManual && <span className="text-[8px] text-blue-500 block mt-1 font-black">* سيتم إضافته للمخزن تلقائياً</span>}
+                                    </td>
                                     <td className="px-6 py-4">
                                        <input 
                                           type="number" 
                                           min="1" 
-                                          className="w-20 bg-slate-100 border-none rounded-lg text-center font-black p-1"
+                                          className="w-20 bg-slate-100 border-none rounded-lg text-center font-black p-2 outline-none focus:ring-2 focus:ring-blue-200"
                                           value={item.quantity} 
-                                          onChange={e => updateItemQty(item.id, parseInt(e.target.value))} 
+                                          onChange={e => updateItem(item.id, 'quantity', parseInt(e.target.value))} 
                                        />
                                     </td>
                                     <td className="px-6 py-4">
                                        <input 
                                           type="number" 
                                           step="0.01"
-                                          className="w-24 bg-slate-100 border-none rounded-lg text-left font-black p-1 font-mono"
+                                          className="w-28 bg-slate-100 border-none rounded-lg text-center font-black p-2 font-mono text-blue-700 outline-none focus:ring-2 focus:ring-blue-200"
                                           value={item.unitPrice} 
-                                          onChange={e => updateItemPrice(item.id, parseFloat(e.target.value))} 
+                                          onChange={e => updateItem(item.id, 'unitPrice', parseFloat(e.target.value))} 
+                                       />
+                                    </td>
+                                    <td className="px-6 py-4">
+                                       <input 
+                                          type="number" 
+                                          step="0.01"
+                                          className="w-28 bg-white border-2 border-green-100 rounded-lg text-center font-black p-2 font-mono text-green-700 outline-none focus:border-green-500"
+                                          value={item.sellingPrice || 0} 
+                                          onChange={e => updateItem(item.id, 'sellingPrice', parseFloat(e.target.value))} 
+                                          placeholder="0.00"
                                        />
                                     </td>
                                     <td className="px-6 py-4 text-left font-black font-mono">{item.total.toLocaleString()} DH</td>
@@ -301,7 +390,10 @@ const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ state, updateState 
                               ))}
                               {formData.items.length === 0 && (
                                  <tr>
-                                    <td colSpan={5} className="py-10 text-center text-slate-400 italic text-xs">يرجى إضافة السلع المستلمة...</td>
+                                    <td colSpan={6} className="py-16 text-center text-slate-400 italic text-xs border-dashed">
+                                        <p>القائمة فارغة.</p>
+                                        <p className="mt-2">استخدم الأزرار أعلاه لإضافة سلع من المخزن أو إدخال سلع جديدة يدوياً.</p>
+                                    </td>
                                  </tr>
                               )}
                            </tbody>
@@ -312,7 +404,7 @@ const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ state, updateState 
                   <div className="flex justify-between items-end bg-slate-50 p-8 rounded-[2rem] border border-slate-200">
                      <div className="w-1/2">
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 mr-2">ملاحظات إضافية</label>
-                        <textarea rows={2} className="w-full bg-white border border-slate-200 rounded-xl p-4 text-xs font-bold resize-none shadow-inner" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
+                        <textarea rows={2} className="w-full bg-white border border-slate-200 rounded-xl p-4 text-xs font-bold resize-none shadow-inner outline-none focus:border-blue-500" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
                      </div>
                      <div className="text-left space-y-2">
                         <p className="text-[10px] font-black text-slate-400 uppercase">صافي الفاتورة (HT)</p>
@@ -323,7 +415,9 @@ const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ state, updateState 
                   <div className="flex items-center gap-4 bg-amber-50 border border-amber-200 p-6 rounded-[2rem]">
                      <AlertCircle className="text-amber-600 shrink-0" size={24} />
                      <p className="text-xs font-bold text-amber-800 leading-relaxed">
-                        بمجرد الحفظ، سيقوم النظام بزيادة الكميات في المخزن آلياً وتغيير ثمن الشراء لآخر قيمة مسجلة لضمان حساب أرباح دقيق.
+                        بمجرد الحفظ، سيقوم النظام بـ: <br/>
+                        1. تحديث الكميات وثمن الشراء والبيع للأصناف الموجودة.<br/>
+                        2. إنشاء "كرت صنف" جديد تلقائياً للأصناف اليدوية وإضافتها للمخزن.
                      </p>
                   </div>
 
@@ -345,14 +439,14 @@ const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ state, updateState 
                </div>
                <div className="flex-1 overflow-y-auto p-6 space-y-3 custom-scrollbar">
                   {state.inventory.map(item => (
-                     <button key={item.id} onClick={() => addItemToInvoice(item)} className="w-full text-right p-5 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-blue-50 hover:border-blue-200 transition-all flex justify-between items-center">
+                     <button key={item.id} onClick={() => addItemToInvoice(item)} className="w-full text-right p-5 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-blue-50 hover:border-blue-200 transition-all flex justify-between items-center group">
                         <div>
-                           <p className="font-black text-slate-800">{item.name}</p>
+                           <p className="font-black text-slate-800 group-hover:text-blue-700 transition-colors">{item.name}</p>
                            <p className="text-[10px] font-bold text-slate-400">SKU: {item.sku}</p>
                         </div>
                         <div className="text-left">
-                           <p className="text-xs font-black text-blue-600">المخزون الحالي: {item.quantity}</p>
-                           <span className="text-[8px] font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded uppercase">اضغط للإضافة</span>
+                           <p className="text-xs font-black text-blue-600">المخزون: {item.quantity}</p>
+                           <span className="text-[8px] font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded uppercase">إضافة</span>
                         </div>
                      </button>
                   ))}

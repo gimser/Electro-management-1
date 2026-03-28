@@ -1,12 +1,7 @@
 
-import React, { useState } from 'react';
-import { AppState, DocType, Document } from '../types';
-import { 
-  Wallet, TrendingUp, TrendingDown, Clock, AlertCircle, 
-  CheckCircle2, DollarSign, Receipt, CreditCard, 
-  ArrowUpRight, ArrowDownLeft, FileText, Search,
-  Filter, Calendar, ChevronRight, MessageSquare, Phone
-} from 'lucide-react';
+import React from 'react';
+import { AppState, DocType } from '../types';
+import { BarChart3, Receipt, FileCheck, Calendar, Download, ShieldCheck, AlertCircle, PieChart } from 'lucide-react';
 
 interface FinanceControlProps {
   state: AppState;
@@ -14,148 +9,102 @@ interface FinanceControlProps {
   onNavigate: (tab: string) => void;
 }
 
-const FinanceControl: React.FC<FinanceControlProps> = ({ state, updateState, onNavigate }) => {
-  const [search, setSearch] = useState('');
+const FinanceControl: React.FC<FinanceControlProps> = ({ state }) => {
+  const currentYear = new Date().getFullYear();
+  const currentMonth = new Date().getMonth();
+  const quarter = Math.floor(currentMonth / 3) + 1;
   
-  // Financial Calculations
-  const invoices = state.documents.filter(d => d.type === DocType.FACTURE);
-  const totalRevenue = invoices.filter(d => d.status === 'Paid' || d.status === 'Partially-Paid')
-    .reduce((acc, d) => acc + (d.paidAmount || d.total), 0);
-  
-  const totalUnpaid = invoices.filter(d => d.status !== 'Paid' && d.status !== 'Cancelled')
-    .reduce((acc, d) => acc + (d.total - (d.paidAmount || 0)), 0);
-  
-  const totalTVA = invoices.filter(d => d.status === 'Paid')
-    .reduce((acc, d) => acc + (d.total - d.subtotal), 0);
+  // فواتير المبيعات (TVA Collectée)
+  const salesDocs = state.documents.filter(d => {
+    const dDate = new Date(d.date);
+    const dQuarter = Math.floor(dDate.getMonth() / 3) + 1;
+    return d.type === DocType.FACTURE && dDate.getFullYear() === currentYear && dQuarter === quarter && d.status === 'Paid';
+  });
 
-  const unpaidInvoices = invoices.filter(d => d.status !== 'Paid' && d.status !== 'Cancelled');
+  const totalSalesHT = salesDocs.reduce((acc, d) => acc + d.subtotal, 0);
+  const totalTvaCollected = salesDocs.reduce((acc, d) => acc + (d.tvaAmount || 0), 0);
 
-  const getStatusStyle = (status: string) => {
-    switch(status) {
-      case 'Paid': return 'bg-green-100 text-green-700 border-green-200';
-      case 'Partially-Paid': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'Sent': return 'bg-amber-100 text-amber-700 border-amber-200';
-      default: return 'bg-slate-100 text-slate-500 border-slate-200';
-    }
-  };
+  // حساب تقديري للضريبة المسترجعة (TVA Récupérable) من المشتريات (20% افتراضياً للتبسيط)
+  // في نظام محاسبي حقيقي، يجب أن تكون الـ Expenses تحتوي على حقل TVA منفصل
+  const expenses = state.expenses.filter(e => {
+     const eDate = new Date(e.date);
+     const eQuarter = Math.floor(eDate.getMonth() / 3) + 1;
+     return eDate.getFullYear() === currentYear && eQuarter === quarter;
+  });
+  const totalExpensesTTC = expenses.reduce((acc, e) => acc + e.amount, 0);
+  const estimatedTvaRecoverable = totalExpensesTTC / 6; // تقريبياً (Amount / 1.2 * 0.2)
 
-  const handleRecordPayment = (docId: string) => {
-    const amount = prompt("أدخل المبلغ المحصل (DH):");
-    if (!amount || isNaN(Number(amount))) return;
-
-    updateState(prev => ({
-      ...prev,
-      documents: prev.documents.map(d => {
-        if (d.id === docId) {
-          const newPaid = (d.paidAmount || 0) + Number(amount);
-          return {
-            ...d,
-            paidAmount: newPaid,
-            status: newPaid >= d.total ? 'Paid' : 'Partially-Paid'
-          };
-        }
-        return d;
-      }),
-      automationLogs: [{
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        action: 'PAYMENT_RECORDED',
-        status: 'success',
-        details: `تم تسجيل دفعة بقيمة ${amount} DH للوثيقة رقم ${state.documents.find(dx => dx.id === docId)?.number}`
-      }, ...(prev.automationLogs || [])]
-    }));
-  };
-
-  const handleWhatsAppReminder = (doc: Document) => {
-    const client = state.clients.find(c => c.id === doc.clientId);
-    if (!client) return;
-    const remaining = doc.total - (doc.paidAmount || 0);
-    const message = `تذكير بالأداء - Electro GIM Services\n\nالسيد(ة) ${client.name}،\nنحيطكم علماً بأن الفاتورة رقم ${doc.number} بمبلغ ${doc.total.toLocaleString()} DH (المتبقي: ${remaining.toLocaleString()} DH) لا تزال بانتظار التسوية.\n\nشكراً لتعاونكم.`;
-    window.open(`https://wa.me/${client.phone.replace(/\s+/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
-  };
+  const netTvaToPay = totalTvaCollected - estimatedTvaRecoverable;
 
   return (
     <div className="p-8 animate-in fade-in duration-700 pb-24 text-right" dir="rtl">
       <div className="flex justify-between items-center mb-10">
         <div>
           <h2 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-             <Wallet className="text-blue-600" size={32} /> مركز الإدارة المالية والسيولة
+             <PieChart className="text-blue-600" size={32} /> الإقرار الضريبي (Déclaration TVA)
           </h2>
-          <p className="text-slate-500 font-medium">تتبع المداخيل، تصفية الديون، ومراقبة الالتزامات الضريبية</p>
+          <p className="text-slate-500 font-medium">حساب الضريبة المستحقة للربع {quarter} من سنة {currentYear}</p>
         </div>
+        <button className="bg-slate-900 text-white px-8 py-3.5 rounded-2xl font-black flex items-center gap-2 shadow-xl hover:bg-blue-600 transition-all uppercase text-[10px] tracking-widest">
+           <Download size={18} /> تصدير تقرير المحاسب
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden group">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">إجمالي المداخيل</p>
-            <p className="text-3xl font-black text-slate-800 font-mono">{totalRevenue.toLocaleString('fr-FR')} <span className="text-sm">DH</span></p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+               <ShieldCheck size={14} className="text-green-500" /> TVA Collectée (المحصلة)
+            </p>
+            <p className="text-3xl font-black text-slate-900 font-mono">{totalTvaCollected.toLocaleString()} <span className="text-sm">DH</span></p>
+            <p className="text-[10px] font-bold text-slate-400 mt-2">على مبيعات بقيمة: {totalSalesHT.toLocaleString()} DH HT</p>
          </div>
-         <div className="bg-red-50 p-8 rounded-[2.5rem] border border-red-100 shadow-sm relative overflow-hidden group">
-            <p className="text-[10px] font-black text-red-400 uppercase tracking-widest mb-1">الديون العالقة (Unpaid)</p>
-            <p className="text-3xl font-black text-red-600 font-mono">{totalUnpaid.toLocaleString('fr-FR')} <span className="text-sm">DH</span></p>
+
+         <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+               <Download size={14} className="text-blue-500" /> TVA Récupérable (تقديري)
+            </p>
+            <p className="text-3xl font-black text-blue-900 font-mono">{estimatedTvaRecoverable.toLocaleString(undefined, {maximumFractionDigits: 0})} <span className="text-sm">DH</span></p>
+            <p className="text-[10px] font-bold text-slate-400 mt-2">على مصاريف: {totalExpensesTTC.toLocaleString()} DH TTC</p>
+         </div>
+
+         <div className={`p-8 rounded-[2.5rem] border relative overflow-hidden ${netTvaToPay > 0 ? 'bg-red-50 border-red-100 text-red-900' : 'bg-green-50 border-green-100 text-green-900'}`}>
+            <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2">
+               <AlertCircle size={14} /> صافي الضريبة للأداء
+            </p>
+            <p className="text-4xl font-black font-mono tracking-tighter">{netTvaToPay > 0 ? netTvaToPay.toLocaleString(undefined, {maximumFractionDigits: 0}) : 0} <span className="text-sm">DH</span></p>
+            {netTvaToPay < 0 && <p className="text-xs font-black mt-2">لديك رصيد دائن (Crédit de TVA): {Math.abs(netTvaToPay).toLocaleString(undefined, {maximumFractionDigits: 0})} DH</p>}
          </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-         <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
-               <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
-                  <h3 className="font-black text-slate-800 flex items-center gap-3">
-                     <Clock className="text-amber-500" size={20} /> فواتير غير مسواة (Pending Settlement)
-                  </h3>
-               </div>
-               <div className="overflow-x-auto">
-                  <table className="w-full text-right">
-                     <thead>
-                        <tr className="bg-slate-50 border-b border-slate-100">
-                           <th className="px-8 py-4 font-black text-slate-400 text-[10px] uppercase tracking-widest">الفاتورة / الزبون</th>
-                           <th className="px-8 py-4 font-black text-slate-400 text-[10px] uppercase tracking-widest text-center">المتبقي</th>
-                           <th className="px-8 py-4 text-left">إجراءات التحصيل</th>
-                        </tr>
-                     </thead>
-                     <tbody className="divide-y divide-slate-50">
-                        {unpaidInvoices.filter(d => d.number.includes(search)).map(doc => {
-                           const client = state.clients.find(c => c.id === doc.clientId);
-                           const remaining = doc.total - (doc.paidAmount || 0);
-                           return (
-                              <tr key={doc.id} className="hover:bg-slate-50/80 transition-all">
-                                 <td className="px-8 py-5">
-                                    <p className="font-black text-slate-800 text-sm">{doc.number}</p>
-                                    <p className="text-[10px] text-blue-600 font-bold uppercase">{client?.name || '---'}</p>
-                                 </td>
-                                 <td className="px-8 py-5 text-center font-black text-red-600 text-sm font-mono">{remaining.toLocaleString('fr-FR')} DH</td>
-                                 <td className="px-8 py-5 text-left">
-                                    <div className="flex items-center justify-end gap-2">
-                                       <a 
-                                          href={`tel:${client?.phone}`}
-                                          className="p-2 bg-green-50 text-green-600 rounded-xl hover:bg-green-600 hover:text-white transition-all shadow-sm"
-                                          title="اتصال مباشر"
-                                       >
-                                          <Phone size={16} />
-                                       </a>
-                                       <button 
-                                          onClick={() => handleRecordPayment(doc.id)}
-                                          className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                                          title="تسجيل دفعة"
-                                       >
-                                          <DollarSign size={16} />
-                                       </button>
-                                       <button 
-                                          onClick={() => handleWhatsAppReminder(doc)}
-                                          className="p-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                                          title="إرسال تذكير واتساب"
-                                       >
-                                          <MessageSquare size={16} />
-                                       </button>
-                                    </div>
-                                 </td>
-                              </tr>
-                           );
-                        })}
-                     </tbody>
-                  </table>
-               </div>
-            </div>
+      <div className="bg-white rounded-[3rem] border border-slate-200 shadow-sm overflow-hidden">
+         <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+            <h3 className="font-black text-slate-800 text-lg flex items-center gap-3">
+               <FileCheck className="text-blue-600" /> تفاصيل الفواتير المصرح بها
+            </h3>
+         </div>
+         <div className="overflow-x-auto">
+            <table className="w-full text-right border-collapse">
+               <thead>
+                  <tr className="bg-slate-50 border-b border-slate-100">
+                     <th className="px-10 py-6 font-black text-slate-400 text-[10px] uppercase tracking-widest">التاريخ</th>
+                     <th className="px-10 py-6 font-black text-slate-400 text-[10px] uppercase tracking-widest">المرجع</th>
+                     <th className="px-10 py-6 font-black text-slate-400 text-[10px] uppercase tracking-widest text-center">Base HT</th>
+                     <th className="px-10 py-6 font-black text-slate-400 text-[10px] uppercase tracking-widest text-center">Taux</th>
+                     <th className="px-10 py-6 font-black text-slate-400 text-[10px] uppercase tracking-widest text-left">Montant TVA</th>
+                  </tr>
+               </thead>
+               <tbody className="divide-y divide-slate-50">
+                  {salesDocs.slice().reverse().map(doc => (
+                     <tr key={doc.id} className="hover:bg-blue-50/20 transition-all group">
+                        <td className="px-10 py-6 text-xs font-bold text-slate-500">{doc.date}</td>
+                        <td className="px-10 py-6 font-black text-slate-800 text-sm font-mono">{doc.number}</td>
+                        <td className="px-10 py-6 text-center font-mono font-bold text-slate-600">{doc.subtotal.toLocaleString()}</td>
+                        <td className="px-10 py-6 text-center font-black text-xs bg-slate-100/50 rounded-lg">20%</td>
+                        <td className="px-10 py-6 text-left font-black text-blue-600 font-mono">{(doc.tvaAmount || 0).toLocaleString()} DH</td>
+                     </tr>
+                  ))}
+               </tbody>
+            </table>
          </div>
       </div>
     </div>

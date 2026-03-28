@@ -1,342 +1,781 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Users, LayoutDashboard, Settings as SettingsIcon, Calendar, 
-  ChevronLeft, Menu, Package, HardHat, Zap, 
-  LifeBuoy, Tag, Clock, CalendarDays, Box, FileText,
-  Megaphone, Share2, Target, ChevronDown, 
-  Wallet, Activity, Cpu, Shield,
-  Navigation2, Landmark, Brain, Scale, LogOut, User as UserIcon,
-  Fingerprint, Lock, Eye, EyeOff, ShieldCheck, Rocket, ShieldAlert,
-  Stethoscope, MessageSquare, Award, ShoppingCart, Banknote,
-  Home, ListChecks, Briefcase, ThumbsUp, Search, Bell, Grid, UserCheck,
-  ClipboardList, UserMinus, ShieldQuestion, FileSignature, Receipt,
-  History, UserCog, Gavel, Archive, TrendingUp, Power, ShoppingBag, Truck
-} from 'lucide-react';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { getDB, saveDB } from './db';
+import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom/client';
 import { AppState, DocType, Document, UserRole } from './types';
+import { getDB, saveDB, rollbackToVersion } from './db';
+import { 
+  LayoutDashboard, Users, Microscope, Calendar, 
+  MapPin, PenTool, Archive, BarChart3, Wallet, Box, Tag, 
+  ShieldCheck, UserCircle, Scale, Database, Map as MapIcon, 
+  Radio, Network, Settings as SettingsIcon, Bell,
+  Megaphone, Target, Workflow, Share2, Truck, HardHat,
+  CalendarClock, BrainCircuit, Fingerprint, Globe,
+  Home, Cpu, Lock, ChevronDown, Store, Wrench, Menu,
+  LogOut, ShieldAlert, Briefcase, FileSignature, 
+  Siren, Layers, Activity, Monitor, FilePlus2, Laptop,
+  Loader2, LineChart, ArrowRight, RotateCcw, X,
+  Wifi, WifiOff, Cloud, CloudOff, RefreshCw, CheckCircle2, AlertTriangle,
+  ClipboardList, MessageSquare, BookOpen, Sparkles, Terminal
+} from 'lucide-react';
 
-// استيراد الصفحات
+// Core Pages
 import Dashboard from './pages/Dashboard';
+import AdvancedAnalytics from './pages/AdvancedAnalytics';
 import ClientsPage from './pages/Clients';
+import SettingsPage from './pages/Settings';
+import UserManagement from './pages/UserManagement';
+import BackupPage from './pages/Backup';
+import LegalManagement from './pages/LegalManagement';
+import Login from './pages/Login';
+
+// Operations Pages
 import CustomerIssuesPage from './pages/CustomerIssues';
+import TechnicalAnalysis from './pages/TechnicalAnalysis';
+import GoogleForms from './pages/GoogleForms';
+import SchedulerPage from './pages/Scheduler';
+import VisitsPage from './pages/Visits';
 import TechniciansPage from './pages/Technicians';
 import TechSchedulePage from './pages/TechSchedule';
-import PricingPage from './pages/Pricing';
-import CustomerWorkSchedulePage from './pages/CustomerWorkSchedule';
-import DocumentList from './pages/DocumentList';
-import DocumentForm from './pages/DocumentForm';
-import SettingsPage from './pages/Settings';
-import SchedulerPage from './pages/Scheduler';
-import MarketingPage from './pages/Marketing';
-import CampaignsPage from './pages/Campaigns';
-import SocialMediaSettings from './pages/SocialMediaSettings';
-import InventoryPage from './pages/Inventory';
-import TechnicalAnalysis from './pages/TechnicalAnalysis';
-import LeadsPage from './pages/Leads';
-import ExpensesPage from './pages/Expenses';
-import AutomationPage from './pages/Automation';
-import VisitsPage from './pages/Visits';
-import FinanceControl from './pages/FinanceControl';
-import PrintView from './components/PrintView';
-import UserManagement from './pages/UserManagement';
-import GimAIPage from './pages/GimAI';
-import LegalManagement from './pages/LegalManagement';
-import WarrantiesPage from './pages/Warranties';
+
+// Network/NOC Pages
+import NetworkDashboard from './pages/NetworkDashboard';
+import NetworkMap from './pages/NetworkMap';
+import NetworkDevices from './pages/NetworkDevices';
+import NetworkFaults from './pages/NetworkFaults';
+
+// Security Pages
+import SecurityAuditPage from './pages/SecurityAudit';
+
+// Finance & Commerce Pages
 import ProductDevisBuilder from './pages/ProductDevisBuilder';
-import ClientDecision from './pages/ClientDecision';
+import DocumentList from './pages/DocumentList';
+import FinanceControl from './pages/FinanceControl';
+import ExpensesPage from './pages/Expenses';
+import InventoryPage from './pages/Inventory';
+import PricingPage from './pages/Pricing';
+import WarrantiesPage from './pages/Warranties';
 import PurchaseInvoices from './pages/PurchaseInvoices';
 
-const AppContent: React.FC = () => {
-  const { user, login, logout, isAuthenticated } = useAuth();
-  const [state, setState] = useState<AppState>(getDB());
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [editingDoc, setEditingDoc] = useState<Document | null>(null);
-  const [printingDoc, setPrintingDoc] = useState<Document | null>(null);
+// Marketing & Growth Pages
+import MarketingPage from './pages/Marketing';
+import LeadsPage from './pages/Leads';
+import AutomationPage from './pages/Automation';
+import OmnichannelControl from './pages/OmnichannelControl';
+import SocialMediaSettings from './pages/SocialMediaSettings';
+
+// Mcommunication & GIM-OS Governance
+import McommunicationPage from './pages/Mcommunication';
+import RasHanout from './pages/Mcommunication/RasHanout';
+import Karne from './pages/Mcommunication/Karne';
+import L3arMode from './pages/Mcommunication/L3arMode';
+import Oracle from './pages/Mcommunication/Oracle';
+import GIMGovernance from './pages/Mcommunication/GIMGovernance';
+
+// AI & Tools
+import GimAIPage from './pages/GimAI';
+import ClientDecision from './pages/ClientDecision';
+
+// SMART HOME OS PAGES
+import SmartDashboard from './pages/SmartHome/SmartDashboard';
+import RoomsManager from './pages/SmartHome/RoomsManager';
+import IoTControlCenter from './pages/SmartHome/IoTControlCenter';
+import SecurityCenter from './pages/SmartHome/SecurityCenter';
+
+// POS & WORKSHOP
+import POSPage from './pages/POS/POSPage';
+import ComputerWorkshop from './pages/Workshop/ComputerWorkshop';
+import ElectronicsRepair from './pages/ElectronicsRepair';
+
+import DocumentForm from './pages/DocumentForm';
+import PrintView from './components/PrintView';
+import { AuthProvider, useAuth } from './context/AuthContext';
+
+// --- Configuration per Role ---
+const getInitialTabForRole = (role: UserRole): string => {
+  switch (role) {
+    case 'Technician': return 'visits'; // Mission Control HUD
+    case 'Sales': return 'pos-terminal';
+    case 'Accountant': return 'invoices';
+    default: return 'dashboard'; // CEO/Manager
+  }
+};
+
+// --- Authenticated Layout Component ---
+const AuthenticatedApp: React.FC = () => {
+  const { user, logout } = useAuth();
   
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
-  const [loginError, setLoginError] = useState('');
+  // State
+  const [state, setState] = useState<AppState | null>(null);
+  const [dbError, setDbError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [navHistory, setNavHistory] = useState<string[]>([]); 
+  const [editingDoc, setEditingDoc] = useState<{type: DocType, doc: Document | null} | null>(null);
+  const [printDoc, setPrintDoc] = useState<Document | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 1024);
+  
+  // --- OFFLINE/SYNC SYSTEM STATE ---
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'pending' | 'syncing' | 'error'>('synced');
+  const [pendingChanges, setPendingChanges] = useState(0);
+  
+  // Undo Toast State
+  const [undoState, setUndoState] = useState<{ id: string, label: string } | null>(null);
 
-  const isTechnician = user?.role === 'Technician';
+  // Initialize Role-Based Tab
+  useEffect(() => {
+    if (user) setActiveTab(getInitialTabForRole(user.role));
+  }, [user]);
 
-  // تحديد الصلاحيات بناءً على رتبة المستخدم (Role-Based Access Control)
-  const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
-    'SuperAdmin': ['*'],
-    'Manager': ['*'],
-    'Technician': ['dashboard', 'visits', 'technical-analysis', 'client-decision'],
-    'Office': ['dashboard', 'clients', 'devis', 'invoices', 'purchase-invoices', 'leads', 'finance', 'expenses', 'customer-issues', 'warranties', 'product-devis-builder', 'pricing', 'client-decision'],
-    'Supervisor': ['dashboard', 'clients', 'customer-issues', 'visits', 'technical-analysis', 'scheduler', 'inventory', 'warranties', 'product-devis-builder', 'pricing', 'client-decision'],
-    'Marketing': ['dashboard', 'leads', 'campaigns', 'automation', 'clients']
+  // --- 1. NETWORK LISTENERS (The Watchdog) ---
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      if (pendingChanges > 0) {
+        syncData();
+      }
+    };
+    
+    const handleOffline = () => {
+      setIsOnline(false);
+      if (syncStatus === 'syncing') setSyncStatus('pending');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [pendingChanges, syncStatus]);
+
+  // --- 2. SYNC ENGINE ---
+  const syncData = async () => {
+    if (!isOnline) return;
+    
+    setSyncStatus('syncing');
+    
+    // Simulate Cloud Sync Delay
+    setTimeout(() => {
+      setSyncStatus('synced');
+      setPendingChanges(0);
+    }, 2000);
   };
 
-  const updateState = useCallback((updater: (prev: AppState) => AppState) => {
-    setState(prev => {
-      const nextState = updater(prev);
-      const finalState: AppState = {
-        ...nextState,
-        clients: [...(nextState.clients || [])],
-        documents: [...(nextState.documents || [])],
-        inventory: [...(nextState.inventory || [])],
-        servicePrices: [...(nextState.servicePrices || [])],
-        expenses: [...(nextState.expenses || [])],
-        users: [...(nextState.users || [])],
-        tasks: [...(nextState.tasks || [])],
-        customerIssues: [...(nextState.customerIssues || [])],
-        visits: [...(nextState.visits || [])],
-        automationLogs: [...(nextState.automationLogs || [])],
-        activityLogs: [...(nextState.activityLogs || [])]
-      };
-      saveDB(finalState);
-      return finalState;
-    });
+  // --- 3. INITIAL LOAD (ASYNC FROM IDB) ---
+  useEffect(() => {
+    const loadData = async () => {
+      const timeoutId = setTimeout(() => {
+        if (!state && !dbError) {
+          setDbError("Database connection timed out. IndexedDB might be blocked or corrupted.");
+        }
+      }, 10000); // 10 second timeout
+
+      try {
+        const loadedState = await getDB();
+        clearTimeout(timeoutId);
+        
+        // Basic Schema Validation
+        if (!loadedState || typeof loadedState !== 'object' || !loadedState.identity) {
+          throw new Error("Invalid database schema detected.");
+        }
+
+        setState(loadedState);
+        setDbError(null);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        console.error("Critical DB Error:", error);
+        setDbError(error instanceof Error ? error.message : "An unknown database error occurred.");
+      }
+    };
+    loadData();
   }, []);
 
-  const canAccess = (tabId: string) => {
-    if (!user) return false;
-    const allowed = ROLE_PERMISSIONS[user.role];
-    if (allowed.includes('*')) return true;
-    return allowed.includes(tabId);
-  };
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const foundUser = state.users.find(u => 
-      u.username === loginForm.username && 
-      (u.password === loginForm.password || (!u.password && loginForm.password === 'admin123'))
-    );
-    
-    if (foundUser) {
-      login(foundUser);
-      setActiveTab(foundUser.role === 'Technician' ? 'visits' : 'dashboard');
-    } else {
-      setLoginError('بيانات الدخول غير صحيحة.');
+  const handleResetDB = async () => {
+    if (confirm("WARNING: This will delete all local data and reset the system to factory settings. Are you absolutely sure?")) {
+      try {
+        const DB_NAME = 'GIM_OS_Enterprise_DB';
+        const request = indexedDB.deleteDatabase(DB_NAME);
+        request.onsuccess = () => {
+          alert("Database reset successful. Reloading...");
+          window.location.reload();
+        };
+        request.onerror = () => {
+          alert("Failed to delete database. Please clear your browser cache manually.");
+        };
+      } catch (e) {
+        console.error("Reset failed", e);
+      }
     }
   };
 
-  const navigateTo = (tab: string) => {
-    if (canAccess(tab)) {
-       setActiveTab(tab);
-       setEditingDoc(null);
-       setPrintingDoc(null);
+  const handleRetryLoad = () => {
+    setDbError(null);
+    window.location.reload();
+  };
+
+  // --- 4. PERSISTENCE (DEBOUNCED AUTO-SAVE & SYNC TRIGGER) ---
+  const isFirstRender = useRef(true);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    if (state) {
+      // Immediate Local Save (Offline First Principle)
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      
+      // UI indicates "Pending" immediately upon change
+      if (syncStatus === 'synced') {
+         setSyncStatus('pending');
+         setPendingChanges(prev => prev + 1);
+      }
+
+      saveTimeoutRef.current = setTimeout(async () => {
+        try {
+          // 1. Save to Local IndexedDB (Always succeeds if device works)
+          await saveDB(state, 'Auto-Save', 'Auto');
+          
+          // 2. Try to Sync if Online
+          if (isOnline) {
+             syncData();
+          } else {
+             // Keep as pending if offline
+             setSyncStatus('pending');
+          }
+        } catch (err) {
+          console.error("Auto-save failed", err);
+          setSyncStatus('error');
+        }
+      }, 2000); // 2 seconds debounce
+    }
+  }, [state]);
+
+  // --- 5. LISTEN FOR MANUAL CHECKPOINTS (FOR UNDO) ---
+  useEffect(() => {
+    const handleCheckpoint = (event: CustomEvent<{versionId: string, label: string}>) => {
+        setUndoState({ id: event.detail.versionId, label: event.detail.label });
+        // Force sync on manual checkpoint if online
+        if (isOnline) syncData();
+        // Auto-dismiss undo after 10 seconds
+        setTimeout(() => setUndoState(null), 10000);
+    };
+
+    window.addEventListener('gim-checkpoint-created', handleCheckpoint as EventListener);
+    return () => window.removeEventListener('gim-checkpoint-created', handleCheckpoint as EventListener);
+  }, [isOnline]);
+
+  const performUndo = async () => {
+      if (!undoState) return;
+      if (confirm(`هل أنت متأكد من التراجع عن: ${undoState.label}؟`)) {
+          try {
+              const previousState = await rollbackToVersion(undoState.id);
+              if (previousState) {
+                  setState(previousState);
+                  setUndoState(null);
+                  alert("تم التراجع بنجاح (Restored)");
+              }
+          } catch (e) {
+              alert("فشل في استعادة النسخة السابقة.");
+          }
+      }
+  };
+
+  const handleNavigate = (tab: string) => {
+    if (activeTab !== tab) {
+        setNavHistory(prev => [...prev, activeTab]);
+        setActiveTab(tab);
+    }
+    if(window.innerWidth < 1024) setIsSidebarOpen(false);
+  };
+
+  const handleBack = () => {
+      if (navHistory.length > 0) {
+          const prevTab = navHistory[navHistory.length - 1];
+          setNavHistory(prev => prev.slice(0, -1));
+          setActiveTab(prevTab);
+      }
+  };
+
+  const updateState = (updater: (prev: AppState) => AppState) => {
+    if (state) {
+        setState(prev => prev ? updater(prev) : null);
     }
   };
 
-  const renderContent = () => {
-    if (printingDoc) {
-      const client = state.clients.find(c => c.id === printingDoc.clientId);
-      return <PrintView document={printingDoc} client={client} settings={state.settings} onClose={() => setPrintingDoc(null)} />;
+  // --- STATUS INDICATOR COMPONENT ---
+  const StatusIndicator = () => {
+    if (!isOnline) {
+      return (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-red-100 rounded-full border border-red-200 shadow-sm animate-pulse">
+           <WifiOff size={14} className="text-red-600" />
+           <span className="text-[10px] font-black uppercase tracking-widest text-red-700">Offline Mode</span>
+           {pendingChanges > 0 && <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 rounded-full">{pendingChanges}</span>}
+        </div>
+      );
     }
 
-    switch (activeTab) {
-      case 'gim-ai': return <GimAIPage state={state} updateState={updateState} />;
-      case 'dashboard': return <Dashboard state={state} onNavigate={navigateTo} />;
-      case 'visits': return <VisitsPage state={state} updateState={updateState} onNavigate={navigateTo} />;
-      case 'technical-analysis': return <TechnicalAnalysis state={state} updateState={updateState} />;
-      case 'client-decision': return <ClientDecision state={state} updateState={updateState} onNavigate={navigateTo} />;
-      case 'scheduler': return <SchedulerPage state={state} updateState={updateState} />;
-      case 'clients': return <ClientsPage state={state} updateState={updateState} />;
-      case 'leads': return <LeadsPage state={state} updateState={updateState} onNavigate={navigateTo} />;
-      case 'customer-issues': return <CustomerIssuesPage state={state} updateState={updateState} />;
-      case 'warranties': return <WarrantiesPage state={state} updateState={updateState} onPrint={setPrintingDoc} />;
-      case 'product-devis-builder': return <ProductDevisBuilder state={state} updateState={updateState} onNavigate={navigateTo} />;
-      case 'pricing': return <PricingPage state={state} updateState={updateState} />;
-      case 'finance': return <FinanceControl state={state} updateState={updateState} onNavigate={navigateTo} />;
-      case 'devis': return <DocumentList type={DocType.DEVIS} state={state} updateState={updateState} onEdit={(doc) => { setEditingDoc(doc); setActiveTab('doc-form-devis'); }} onPrint={setPrintingDoc} onNew={() => { setEditingDoc(null); setActiveTab('product-devis-builder'); }} />;
-      case 'invoices': return <DocumentList type={DocType.FACTURE} state={state} updateState={updateState} onEdit={(doc) => { setEditingDoc(doc); setActiveTab('doc-form-invoice'); }} onPrint={setPrintingDoc} onNew={() => { setEditingDoc(null); setActiveTab('doc-form-invoice'); }} />;
-      case 'purchase-invoices': return <PurchaseInvoices state={state} updateState={updateState} />;
-      case 'expenses': return <ExpensesPage state={state} updateState={updateState} />;
-      case 'inventory': return <InventoryPage state={state} updateState={updateState} />;
-      case 'user-management': return <UserManagement state={state} updateState={updateState} />;
-      case 'legal': return <LegalManagement state={state} updateState={updateState} />;
-      case 'settings': return <SettingsPage settings={state.settings} updateSettings={(s) => updateState(prev => ({...prev, settings: s}))} state={state} />;
-      case 'automation': return <MarketingPage state={state} updateState={updateState} />;
-      default: return <Dashboard state={state} onNavigate={navigateTo} />;
-    }
-  };
-
-  const menuSections = [
-    {
-      title: "العقل والتحليلات",
-      items: [
-        { id: 'gim-ai', name: "الذكاء المركزي AI", icon: <Cpu size={20} /> },
-        { id: 'dashboard', name: "لوحة القيادة", icon: <Grid size={20} /> },
-      ]
-    },
-    {
-      title: "العمليات الميدانية",
-      items: [
-        { id: 'visits', name: "المهام الجارية", icon: <Navigation2 size={20} /> },
-        { id: 'technical-analysis', name: "تشخيص الأعطال", icon: <Stethoscope size={20} /> },
-        { id: 'client-decision', name: "قبول أو رفض العمل", icon: <ThumbsUp size={20} /> },
-        { id: 'scheduler', name: "المواعيد", icon: <Calendar size={20} /> },
-      ]
-    },
-    {
-      title: "إدارة العلاقات",
-      items: [
-        { id: 'clients', name: "الزبناء (CRM)", icon: <Users size={20} /> },
-        { id: 'leads', name: "الفرص والطلبات", icon: <Target size={20} /> },
-        { id: 'customer-issues', name: "مركز الدعم", icon: <LifeBuoy size={20} /> },
-        { id: 'warranties', name: "شواهد الضمان", icon: <ShieldCheck size={20} /> },
-      ]
-    },
-    {
-      title: "الإدارة المالية",
-      items: [
-        { id: 'product-devis-builder', name: "منشئ عروض الأثمان", icon: <ShoppingCart size={20} /> },
-        { id: 'pricing', name: "فهرس أسعار الخدمات", icon: <Banknote size={20} /> },
-        { id: 'finance', name: "الخزينة والسيولة", icon: <Landmark size={20} /> },
-        { id: 'devis', name: "أرشيف عروض الأثمان", icon: <FileText size={20} /> },
-        { id: 'invoices', name: "فواتير الزبائن", icon: <Package size={20} /> },
-        { id: 'purchase-invoices', name: "فواتير المشتريات", icon: <Truck size={20} /> },
-        { id: 'expenses', name: "المصاريف", icon: <Wallet size={20} /> },
-        { id: 'inventory', name: "المخزون", icon: <Box size={20} /> },
-      ]
-    },
-    {
-      title: "النظام والأمان",
-      items: [
-        { id: 'user-management', name: "المستخدمين", icon: <Shield size={20} /> },
-        { id: 'legal', name: "القانون والأرشفة", icon: <Scale size={20} /> },
-        { id: 'settings', name: "الإعدادات", icon: <SettingsIcon size={20} /> },
-      ]
-    }
-  ];
-
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 relative overflow-hidden font-arabic" dir="rtl">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(37,99,235,0.1),transparent)] pointer-events-none"></div>
-        <div className="max-w-md w-full relative z-10 animate-slide-up">
-          <div className="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[4rem] p-12 shadow-2xl space-y-12">
-            <div className="text-center space-y-6">
-              <div className="w-24 h-24 bg-blue-600 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-[0_0_50px_rgba(37,99,235,0.4)] border border-blue-400/30">
-                <Rocket size={48} className="text-white" />
-              </div>
-              <h1 className="text-5xl font-black text-white tracking-tighter uppercase mb-2">GIM CORE</h1>
-              <p className="text-blue-400 font-black text-[10px] uppercase tracking-[0.4em]">Integrated Business OS</p>
-            </div>
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div className="space-y-4">
-                <input required className="w-full bg-white/5 border border-white/10 rounded-3xl px-8 py-5 text-white font-bold placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all" placeholder="اسم المستخدم" value={loginForm.username} onChange={e => setLoginForm({...loginForm, username: e.target.value})} />
-                <input required type="password" placeholder="كلمة المرور" className="w-full bg-white/5 border border-white/10 rounded-3xl px-8 py-5 text-white font-bold placeholder:text-slate-600 outline-none focus:border-blue-500 transition-all" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} />
-              </div>
-              {loginError && <p className="text-red-400 text-xs font-bold text-center">{loginError}</p>}
-              <button type="submit" className="w-full bg-blue-600 text-white font-black py-6 rounded-3xl shadow-xl hover:bg-blue-500 transition-all uppercase tracking-widest text-xs">Authorize Entry</button>
-            </form>
+    switch (syncStatus) {
+      case 'syncing':
+        return (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-full border border-blue-100 shadow-sm">
+             <RefreshCw size={14} className="text-blue-600 animate-spin" />
+             <span className="text-[10px] font-black uppercase tracking-widest text-blue-700">Syncing Cloud...</span>
           </div>
+        );
+      case 'pending':
+        return (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 rounded-full border border-amber-200 shadow-sm">
+             <CloudOff size={14} className="text-amber-600" />
+             <span className="text-[10px] font-black uppercase tracking-widest text-amber-700">Pending Upload</span>
+             <span className="bg-amber-500 text-white text-[8px] font-bold px-1.5 rounded-full">{pendingChanges}</span>
+          </div>
+        );
+      case 'error':
+        return (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 rounded-full border border-red-200 shadow-sm">
+             <AlertTriangle size={14} className="text-red-600" />
+             <span className="text-[10px] font-black uppercase tracking-widest text-red-700">Sync Error</span>
+          </div>
+        );
+      default: // Synced
+        return (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full border border-green-200 shadow-[0_0_10px_rgba(34,197,94,0.2)]">
+             <div className="relative">
+                <Cloud size={14} className="text-green-600" />
+                <div className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full border border-white"></div>
+             </div>
+             <span className="text-[10px] font-black uppercase tracking-widest text-green-700">System Online</span>
+          </div>
+        );
+    }
+  };
+
+  // --- LOADING & ERROR SCREENS ---
+  if (dbError) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-[#0f172a] text-white p-6 text-center">
+        <div className="w-20 h-20 bg-red-500/20 rounded-3xl flex items-center justify-center text-red-500 mb-8 border border-red-500/30">
+          <ShieldAlert size={40} />
+        </div>
+        <h2 className="text-3xl font-black tracking-tighter mb-4 text-red-500">DATABASE CRITICAL ERROR</h2>
+        <div className="max-w-md bg-slate-900/50 border border-slate-800 p-6 rounded-2xl mb-8 font-mono text-xs text-slate-400 text-left overflow-auto max-h-40 w-full">
+          <p className="text-red-400 mb-2 font-bold">Error Details:</p>
+          {dbError}
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+          <button 
+            onClick={handleRetryLoad}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2"
+          >
+            <RefreshCw size={18} /> Retry Loading
+          </button>
+          <button 
+            onClick={handleResetDB}
+            className="flex-1 bg-slate-800 hover:bg-red-600 text-white font-black py-4 rounded-2xl transition-all flex items-center justify-center gap-2"
+          >
+            <Database size={18} /> Emergency Reset
+          </button>
+        </div>
+        
+        <p className="mt-8 text-slate-500 text-xs font-bold uppercase tracking-widest">
+          GIM-OS Enterprise v3.0 • Recovery Console
+        </p>
+      </div>
+    );
+  }
+
+  if (!state) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-[#0f172a] text-white">
+        <div className="relative mb-8">
+          <Loader2 size={80} className="animate-spin text-blue-500" />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Database size={24} className="text-blue-300" />
+          </div>
+        </div>
+        <h2 className="text-3xl font-black tracking-tighter mb-2">GIM OPERATING SYSTEM</h2>
+        <div className="flex items-center gap-3 text-blue-300/60 text-xs font-mono uppercase tracking-[0.3em]">
+          <span className="animate-pulse">Initializing Storage Engine</span>
+          <span className="w-1 h-1 bg-blue-500 rounded-full animate-ping"></span>
         </div>
       </div>
     );
   }
 
+  if (printDoc) {
+    const client = state.clients.find(c => c.id === printDoc.clientId);
+    return <PrintView document={printDoc} client={client} settings={state.identity} onClose={() => setPrintDoc(null)} />;
+  }
+
+  if (editingDoc) {
+    return <DocumentForm 
+      initialType={editingDoc.type} 
+      editingDoc={editingDoc.doc} 
+      state={state} 
+      updateState={updateState} 
+      onCancel={() => setEditingDoc(null)} 
+      onSave={() => setEditingDoc(null)} 
+    />;
+  }
+
+  const renderContent = () => {
+    const role = user?.role || 'Technician';
+    const isTech = role === 'Technician';
+    const isAdmin = role === 'CEO' || role === 'Manager';
+
+    switch (activeTab) {
+      case 'dashboard': return isAdmin ? <Dashboard state={state} onNavigate={handleNavigate} /> : <VisitsPage state={state} updateState={updateState} onNavigate={handleNavigate} />;
+      case 'analytics': return isAdmin ? <AdvancedAnalytics state={state} /> : null;
+      case 'clients': return <ClientsPage state={state} updateState={updateState} />;
+      case 'gim-ai': return <GimAIPage state={state} updateState={updateState} />;
+      case 'repair-dashboard': return <ElectronicsRepair view="dashboard" state={state} updateState={updateState} />;
+      case 'repair-reception': return <ElectronicsRepair view="reception" state={state} updateState={updateState} />;
+      case 'repair-workbench': return <ElectronicsRepair view="workbench" state={state} updateState={updateState} />;
+      case 'workshop': return <ComputerWorkshop state={state} updateState={updateState} />;
+      case 'pos-terminal': return <POSPage state={state} updateState={updateState} onPrint={setPrintDoc} />;
+      case 'security-audit': return <SecurityAuditPage state={state} updateState={updateState} />;
+      case 'sh-dashboard': return <SmartDashboard state={state} updateState={updateState} />;
+      case 'sh-rooms': return <RoomsManager state={state} updateState={updateState} />;
+      case 'sh-devices': return <IoTControlCenter state={state} updateState={updateState} />;
+      case 'sh-security': return <SecurityCenter state={state} updateState={updateState} />;
+      case 'customer-support': return <CustomerIssuesPage state={state} updateState={updateState} />;
+      case 'scheduler': return <SchedulerPage state={state} updateState={updateState} />;
+      case 'visits': return <VisitsPage state={state} updateState={updateState} onNavigate={handleNavigate} />;
+      case 'client-portal': return <ClientDecision state={state} updateState={updateState} onNavigate={handleNavigate} />;
+      case 'diagnosis': return <TechnicalAnalysis state={state} updateState={updateState} />;
+      case 'technicians': return <TechniciansPage state={state} updateState={updateState} />;
+      case 'tech-schedule': return <TechSchedulePage state={state} updateState={updateState} />;
+      case 'marketing-hub': return isAdmin ? <MarketingPage state={state} updateState={updateState} /> : null;
+      case 'leads': return isAdmin ? <LeadsPage state={state} updateState={updateState} onNavigate={handleNavigate} /> : null;
+      case 'automation': return isAdmin ? <AutomationPage state={state} updateState={updateState} /> : null;
+      case 'omnichannel': return isAdmin ? <OmnichannelControl state={state} updateState={updateState} /> : null;
+      
+      // Mcommunication & Governance
+      case 'mcommunication': return isAdmin ? <McommunicationPage state={state} updateState={updateState} /> : null;
+      case 'ras-hanout': return isAdmin ? <RasHanout state={state} /> : null;
+      case 'karne': return isAdmin ? <Karne state={state} /> : null;
+      case 'l3ar-mode': return isAdmin ? <L3arMode state={state} /> : null;
+      case 'oracle-chat': return isAdmin ? <Oracle state={state} /> : null;
+      case 'gim-governance': return isAdmin ? <GIMGovernance /> : null;
+
+      case 'network-noc': return <NetworkDashboard state={state} />;
+      case 'network-map': return <NetworkMap state={state} />;
+      case 'network-devices': return <NetworkDevices state={state} updateState={updateState} />;
+      case 'network-faults': return <NetworkFaults state={state} updateState={updateState} />;
+      case 'devis-builder': return <ProductDevisBuilder state={state} updateState={updateState} onNavigate={handleNavigate} />;
+      case 'devis-archive': return <DocumentList type={DocType.DEVIS} state={state} updateState={updateState} onEdit={(doc) => setEditingDoc({type: DocType.DEVIS, doc})} onPrint={setPrintDoc} onNew={() => setEditingDoc({type: DocType.DEVIS, doc: null})} />;
+      case 'invoices': return isAdmin ? <DocumentList type={DocType.FACTURE} state={state} updateState={updateState} onEdit={(doc) => setEditingDoc({type: DocType.FACTURE, doc})} onPrint={setPrintDoc} onNew={() => setEditingDoc({type: DocType.FACTURE, doc: null})} /> : null;
+      case 'taxes': return isAdmin ? <FinanceControl state={state} updateState={updateState} onNavigate={handleNavigate} /> : null;
+      case 'purchases': return isAdmin ? <PurchaseInvoices state={state} updateState={updateState} /> : null;
+      case 'expenses': return <ExpensesPage state={state} updateState={updateState} />;
+      case 'inventory': return <InventoryPage state={state} updateState={updateState} />;
+      case 'pricing': return <PricingPage state={state} updateState={updateState} />;
+      case 'warranty': return <WarrantiesPage state={state} updateState={updateState} onPrint={setPrintDoc} />;
+      case 'account': return isAdmin ? <UserManagement state={state} updateState={updateState} /> : null;
+      case 'legal-archive': return isAdmin ? <LegalManagement state={state} updateState={updateState} /> : null;
+      case 'backup': return isAdmin ? <BackupPage state={state} updateState={updateState} /> : null;
+      case 'google-forms': return isAdmin ? <GoogleForms /> : null;
+      case 'settings': return isAdmin ? <SettingsPage settings={state.identity} updateSettings={(s) => updateState(prev => ({...prev, identity: s}))} /> : null;
+      case 'social-settings': return isAdmin ? <SocialMediaSettings settings={state.settings} updateSettings={(s) => updateState(prev => ({...prev, settings: {...prev.settings, ...s}}))} /> : null;
+      default: return isAdmin ? <Dashboard state={state} onNavigate={handleNavigate} /> : <VisitsPage state={state} updateState={updateState} onNavigate={handleNavigate} />;
+    }
+  };
+
+  const NavItem = ({ id, name, icon }: { id: string, name: string, icon: React.ReactNode }) => (
+    <button 
+      onClick={() => handleNavigate(id)}
+      className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-2xl transition-all duration-300 group relative overflow-hidden ${activeTab === id ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg shadow-blue-900/30' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+    >
+      <div className={`relative z-10 transition-transform group-hover:scale-110 ${activeTab === id ? 'scale-110' : ''}`}>{icon}</div>
+      <span className="relative z-10 text-xs font-bold whitespace-nowrap tracking-wide">{name}</span>
+      {activeTab === id && <div className="absolute right-0 top-0 bottom-0 w-1 bg-white/20"></div>}
+    </button>
+  );
+
+  const NavGroup = ({ title, children, defaultOpen = true }: { title: string, children?: React.ReactNode, defaultOpen?: boolean }) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+    return (
+      <div className="mb-6">
+        <button 
+          onClick={() => setIsOpen(!isOpen)}
+          className="w-full flex items-center justify-between px-4 py-2 mb-2 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] hover:text-slate-300 transition-colors group"
+        >
+          <span className="group-hover:text-white transition-colors">{title}</span>
+          <ChevronDown 
+            size={12} 
+            className={`transition-transform duration-300 ${isOpen ? 'rotate-180 text-blue-500' : 'rotate-0'}`} 
+          />
+        </button>
+        <div className={`space-y-1 overflow-hidden transition-all duration-500 ease-in-out ${isOpen ? 'max-h-[1000px] opacity-100' : 'max-h-0 opacity-0'}`}>
+          {children}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSidebar = () => {
+    const role = user?.role;
+    
+    // --- TECHNICIAN INTERFACE (Field Mode) ---
+    if (role === 'Technician') {
+        return (
+            <div className="space-y-6 pt-4">
+                {/* Profile / Status Card */}
+                <div className="mx-2 p-5 bg-gradient-to-br from-slate-800 to-slate-900 rounded-[1.5rem] border border-slate-700/50 relative overflow-hidden group shadow-lg">
+                    <div className="relative z-10 flex items-center gap-4">
+                        <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg border-2 border-blue-400/20">
+                            <HardHat size={24} />
+                        </div>
+                        <div>
+                            <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest mb-1">المعرف التقني</p>
+                            <p className="text-white font-black text-sm">{user?.fullName.split(' ')[0]}</p>
+                        </div>
+                    </div>
+                    {/* Background Pattern */}
+                    <div className="absolute right-0 top-0 w-32 h-32 bg-blue-600/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+                </div>
+
+                {/* Core Modules - Focused & Elegant */}
+                <div className="space-y-2">
+                    <p className="px-6 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                        <MapPin size={10}/> العمليات الميدانية
+                    </p>
+                    <NavItem id="visits" name="غرفة العمليات (HUD)" icon={<ShieldAlert size={20} className={activeTab === 'visits' ? 'text-white animate-pulse' : 'text-blue-500'} />} />
+                    <NavItem id="scheduler" name="الأجندة والمواعيد" icon={<CalendarClock size={20} />} />
+                </div>
+
+                <div className="space-y-2">
+                    <p className="px-6 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                        <Wrench size={10}/> أدوات الورشة
+                    </p>
+                    <NavItem id="diagnosis" name="التشخيص الفني" icon={<Microscope size={20} />} />
+                    <NavItem id="repair-workbench" name="إصلاح الأجهزة" icon={<Monitor size={20} />} />
+                    <NavItem id="inventory" name="قطع الغيار" icon={<Box size={20} />} />
+                </div>
+
+                <div className="space-y-2">
+                    <p className="px-6 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                        <FileSignature size={10}/> الزبون والموافقة
+                    </p>
+                    <NavItem id="client-portal" name="بوابة الموافقة" icon={<CheckCircle2 size={20} />} />
+                    <NavItem id="gim-ai" name="المساعد الذكي (AI)" icon={<BrainCircuit size={20} />} />
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <>
+            <NavGroup title="القيادة">
+                <NavItem id="dashboard" name="لوحة التحكم (Tactical)" icon={<LayoutDashboard size={18} />} />
+                <NavItem id="analytics" name="التحليل الاستراتيجي" icon={<LineChart size={18} />} />
+                <NavItem id="clients" name="قاعدة الزبناء" icon={<Users size={18} />} />
+                <NavItem id="gim-ai" name="GIM Mind 4.0" icon={<BrainCircuit size={18} />} />
+            </NavGroup>
+            <NavGroup title="مركز صيانة الأجهزة" defaultOpen={true}>
+                <NavItem id="repair-dashboard" name="لوحة الورشة" icon={<Monitor size={18} />} />
+                <NavItem id="repair-reception" name="استقبال الأجهزة" icon={<FilePlus2 size={18} />} />
+                <NavItem id="repair-workbench" name="طاولة العمل" icon={<Wrench size={18} />} />
+                <NavItem id="workshop" name="أصول الزبناء" icon={<Laptop size={18} />} />
+            </NavGroup>
+            
+            {/* GIM-OS Invisible Governance Modules */}
+            <NavGroup title="Mcommunication" defaultOpen={true}>
+                <NavItem id="mcommunication" name="لوحة الإرسال (Campaigns)" icon={<MessageSquare size={18} />} />
+                <NavItem id="ras-hanout" name="Ras L'Hanout (Feed)" icon={<Activity size={18} />} />
+                <NavItem id="karne" name="Karné (Trust Ledger)" icon={<BookOpen size={18} />} />
+                <NavItem id="l3ar-mode" name="L'3ar Mode (Emergency)" icon={<Siren size={18} className="text-red-500" />} />
+                <NavItem id="oracle-chat" name="Oracle (Advisor)" icon={<Sparkles size={18} className="text-purple-500" />} />
+                <NavItem id="gim-governance" name="GIM-OS Core Link" icon={<Terminal size={18} className="text-green-500" />} />
+            </NavGroup>
+
+            <NavGroup title="شبكات IP & IoT" defaultOpen={false}>
+                <NavItem id="network-noc" name="غرفة المراقبة (NOC)" icon={<Radio size={18} />} />
+                <NavItem id="network-map" name="خريطة التوصيلات" icon={<MapIcon size={18} />} />
+                <NavItem id="network-devices" name="تجهيزات IP" icon={<Database size={18} />} />
+                <NavItem id="sh-devices" name="وحدات IoT" icon={<Cpu size={18} />} />
+                <NavItem id="network-faults" name="فحص البروتوكولات" icon={<Activity size={18} />} />
+            </NavGroup>
+            <NavGroup title="الدفاع السيبراني" defaultOpen={false}>
+                <NavItem id="security-audit" name="Zero Trust Center" icon={<ShieldAlert size={18} className="text-red-500" />} />
+            </NavGroup>
+            <NavGroup title="Smart Home OS" defaultOpen={false}>
+                <NavItem id="sh-dashboard" name="لوحة التحكم" icon={<Home size={18} />} />
+                <NavItem id="sh-rooms" name="الغرف" icon={<LayoutDashboard size={18} />} />
+                <NavItem id="sh-security" name="الأمن والمراقبة" icon={<Lock size={18} />} />
+            </NavGroup>
+            <NavGroup title="المتجر والمبيعات" defaultOpen={false}>
+                <NavItem id="pos-terminal" name="نقطة البيع (POS)" icon={<Store size={18} />} />
+            </NavGroup>
+            <NavGroup title="التسويق والنمو" defaultOpen={false}>
+                <NavItem id="marketing-hub" name="مركز التسويق" icon={<Megaphone size={18} />} />
+                <NavItem id="leads" name="إدارة الفرص" icon={<Target size={18} />} />
+                <NavItem id="automation" name="الأتمتة" icon={<Workflow size={18} />} />
+                <NavItem id="google-forms" name="Google Forms" icon={<ClipboardList size={18} />} />
+                <NavItem id="omnichannel" name="الربط الموحد" icon={<Share2 size={18} />} />
+            </NavGroup>
+            <NavGroup title="الميدان" defaultOpen={false}>
+                <NavItem id="visits" name="مراقبة المهام" icon={<MapPin size={18} />} />
+                <NavItem id="client-portal" name="بوابة الموافقة" icon={<FileSignature size={18} />} />
+                <NavItem id="technicians" name="الفريق التقني" icon={<HardHat size={18} />} />
+                <NavItem id="tech-schedule" name="الجدولة" icon={<CalendarClock size={18} />} />
+                <NavItem id="customer-support" name="الدعم الفني" icon={<Bell size={18} />} />
+                <NavItem id="scheduler" name="الأجندة" icon={<Calendar size={18} />} />
+            </NavGroup>
+            <NavGroup title="المالية" defaultOpen={false}>
+                <NavItem id="devis-builder" name="منشئ العروض" icon={<PenTool size={18} />} />
+                <NavItem id="devis-archive" name="الأرشيف" icon={<Archive size={18} />} />
+                <NavItem id="invoices" name="الفواتير" icon={<PenTool size={18} />} />
+                <NavItem id="taxes" name="الضرائب" icon={<BarChart3 size={18} />} />
+                <NavItem id="purchases" name="التوريد" icon={<Truck size={18} />} />
+                <NavItem id="expenses" name="المصاريف" icon={<Wallet size={18} />} />
+                <NavItem id="inventory" name="المخزن" icon={<Box size={18} />} />
+                <NavItem id="pricing" name="الأسعار" icon={<Tag size={18} />} />
+                <NavItem id="warranty" name="الضمان" icon={<ShieldCheck size={18} />} />
+            </NavGroup>
+            {role === 'CEO' && (
+                <NavGroup title="System" defaultOpen={false}>
+                    <NavItem id="account" name="الحسابات" icon={<UserCircle size={18} />} />
+                    <NavItem id="legal-archive" name="قانوني" icon={<Scale size={18} />} />
+                    <NavItem id="backup" name="النسخ الاحتياطي" icon={<Database size={18} />} />
+                    <NavItem id="google-forms" name="Google Forms" icon={<ClipboardList size={18} />} />
+                    <NavItem id="settings" name="إعدادات الشركة" icon={<Fingerprint size={18} />} />
+                    <NavItem id="social-settings" name="إعدادات الربط" icon={<SettingsIcon size={18} />} />
+                </NavGroup>
+            )}
+        </>
+    );
+  };
+
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 font-arabic" dir="rtl">
-      <aside className={`${isSidebarOpen ? 'w-80' : 'w-24'} ${isTechnician ? 'hidden lg:flex' : 'flex'} bg-[#0f172a] text-white transition-all duration-500 flex flex-col z-50 shadow-[20px_0_60px_rgba(0,0,0,0.1)]`}>
-        <div className="p-10 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20"><Rocket size={24} className="text-white" /></div>
-            {isSidebarOpen && <h1 className="font-black text-2xl tracking-tighter text-white uppercase">Electro GIM</h1>}
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-arabic" dir="rtl">
+      
+      {/* Sidebar Overlay for Mobile */}
+      {isSidebarOpen && window.innerWidth < 1024 && (
+        <div className="fixed inset-0 bg-black/60 z-40 backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)}></div>
+      )}
+
+      {/* Sidebar */}
+      <aside 
+        className={`fixed lg:static top-0 right-0 h-full bg-[#0f172a] text-white flex flex-col z-50 border-l border-slate-800 transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) ${
+          isSidebarOpen ? 'w-[280px] translate-x-0 shadow-2xl' : 'w-0 translate-x-full lg:w-0 lg:translate-x-0 overflow-hidden opacity-0 lg:opacity-100'
+        }`}
+      >
+        <div className="p-8 flex items-center gap-4 border-b border-slate-800/50 min-w-[280px]">
+          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-600/20 relative overflow-hidden">
+             <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
+             <ShieldCheck size={26} />
+          </div>
+          <div>
+             <span className="font-black text-xl tracking-tighter block leading-none">GIM-OS</span>
+             <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{user?.role} Edition</span>
           </div>
         </div>
         
-        <nav className="flex-1 overflow-y-auto px-6 pb-10 space-y-10 custom-scrollbar">
-          {menuSections.map((section, sIdx) => {
-            const filteredItems = section.items.filter(item => canAccess(item.id));
-            if (filteredItems.length === 0) return null;
-            return (
-              <div key={sIdx} className="space-y-4">
-                {isSidebarOpen && <p className="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.3em]">{section.title}</p>}
-                <div className="space-y-2">
-                  {filteredItems.map((item) => (
-                    <button 
-                      key={item.id} 
-                      onClick={() => navigateTo(item.id)} 
-                      className={`w-full flex items-center gap-4 p-4 rounded-[1.5rem] transition-all relative ${activeTab === item.id ? 'bg-blue-600 text-white shadow-xl' : 'hover:bg-white/5 text-slate-400'}`}
-                    >
-                      {item.icon}
-                      {isSidebarOpen && <span className="font-bold text-xs">{item.name}</span>}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </nav>
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar min-w-[280px]">
+          {renderSidebar()}
+        </div>
 
-        <div className="p-6 border-t border-white/5">
-           <button onClick={logout} className="w-full flex items-center gap-4 p-4 rounded-2xl hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all">
-             <LogOut size={20} /> 
-             {isSidebarOpen && <span className="font-bold text-xs">LOGOUT</span>}
+        <div className="p-4 border-t border-slate-800 min-w-[280px]">
+           <button 
+             onClick={logout}
+             className="w-full bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white flex items-center gap-3 px-5 py-4 rounded-2xl transition-all font-black text-xs group"
+           >
+              <LogOut size={18} className="group-hover:-translate-x-1 transition-transform" />
+              <span>تسجيل الخروج</span>
            </button>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        <header className="h-20 lg:h-24 bg-white/80 backdrop-blur-xl border-b border-slate-200 flex items-center px-6 lg:px-12 justify-between shrink-0 z-40 sticky top-0">
-           <div className="flex items-center gap-4 lg:gap-6">
-              {!isTechnician && (
-                <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-3 bg-slate-100 rounded-2xl text-slate-500 hover:text-blue-600 transition-all shadow-sm"><Menu size={20} /></button>
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto custom-scrollbar flex flex-col relative bg-slate-50">
+        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 lg:px-10 sticky top-0 z-40 shrink-0">
+           <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+                className="p-2.5 bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 rounded-xl transition-all shadow-sm active:scale-95"
+              >
+                <Menu size={22} />
+              </button>
+              
+              {/* Back Button (Navigation History) */}
+              {navHistory.length > 0 && (
+                  <button 
+                    onClick={handleBack}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-xl transition-all font-bold text-xs"
+                  >
+                    <ArrowRight size={16} /> رجوع
+                  </button>
               )}
-              {isTechnician && <div className="w-10 h-10 bg-blue-600 rounded-xl flex lg:hidden items-center justify-center text-white shadow-lg"><HardHat size={20} /></div>}
-              <div>
-                <h1 className="text-xl lg:text-2xl font-black text-slate-800 uppercase tracking-tight capitalize">{activeTab.replace(/-/g, ' ')}</h1>
-                {isTechnician && <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest hidden lg:block">Field Environment Active</p>}
+
+              {/* Robust Network & Sync Indicator */}
+              <div className="hidden md:block">
+                 <StatusIndicator />
               </div>
            </div>
            
-           <div className="flex items-center gap-4 lg:gap-8">
-              {isTechnician && (
-                <button onClick={logout} className="lg:hidden p-3 bg-red-50 text-red-600 rounded-2xl hover:bg-red-100 transition-all flex items-center gap-2 shadow-sm border border-red-100">
-                  <Power size={20} />
-                  <span className="text-[10px] font-black uppercase">خروج</span>
-                </button>
-              )}
-
-              <div className="flex items-center gap-4">
-                 <div className="text-left hidden md:block">
-                    <p className="text-[11px] font-black text-slate-900 leading-none">{user?.fullName}</p>
-                    <span className="text-[9px] font-black text-blue-600 uppercase tracking-widest">{user?.role}</span>
+           <div className="flex items-center gap-6">
+              <div className="text-right hidden md:block">
+                 <p className="text-sm font-black text-slate-800">{user?.fullName}</p>
+                 <div className="flex items-center justify-end gap-1.5 text-[10px] font-bold text-slate-400 uppercase">
+                    <Briefcase size={10} /> {user?.role}
                  </div>
-                 <div className="w-10 h-10 lg:w-12 lg:h-12 rounded-2xl bg-[#0f172a] border-2 border-slate-200 flex items-center justify-center text-white font-black shadow-xl">
-                    {user?.username.charAt(0).toUpperCase()}
-                 </div>
+              </div>
+              <div className="w-11 h-11 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 border-2 border-white shadow-sm">
+                 <UserCircle size={26} />
               </div>
            </div>
         </header>
-
-        <div className={`flex-1 overflow-y-auto bg-slate-50/30 custom-scrollbar ${isTechnician ? 'pb-24' : ''}`}>
-           <div className="p-4 lg:p-8">{renderContent()}</div>
+        
+        <div className="flex-1 w-full relative">
+           {/* Mobile Status Indicator */}
+           <div className="md:hidden px-6 pt-4 pb-2">
+              <StatusIndicator />
+           </div>
+           
+           {renderContent()}
         </div>
 
-        {isTechnician && (
-          <nav className="lg:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-sm bg-slate-900/90 backdrop-blur-2xl border border-white/10 h-20 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] z-50 flex items-center justify-around px-6">
-             {[
-               { id: 'dashboard', name: 'Dashboard', icon: <Home size={22} /> },
-               { id: 'visits', name: 'Tasks', icon: <Navigation2 size={22} /> },
-               { id: 'technical-analysis', name: 'Diagnose', icon: <Stethoscope size={22} /> },
-               { id: 'client-decision', name: 'Consent', icon: <ThumbsUp size={22} /> },
-             ].map(item => (
-               <button 
-                 key={item.id} 
-                 onClick={() => navigateTo(item.id)}
-                 className={`flex flex-col items-center gap-1.5 transition-all relative ${activeTab === item.id ? 'text-blue-400' : 'text-slate-500'}`}
-               >
-                 {activeTab === item.id && <div className="absolute -top-4 w-8 h-1 bg-blue-400 rounded-full shadow-[0_0_10px_#60a5fa]"></div>}
-                 {item.icon}
-                 <span className="text-[8px] font-black uppercase">{item.name}</span>
-               </button>
-             ))}
-          </nav>
+        {/* Global Undo Toast */}
+        {undoState && (
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] animate-in slide-in-from-bottom-10 fade-in duration-300">
+                <div className="bg-slate-900 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-6 border border-slate-700">
+                    <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-300">تم الحفظ بنجاح</span>
+                        <span className="text-sm font-black">{undoState.label}</span>
+                    </div>
+                    <div className="h-8 w-px bg-slate-700"></div>
+                    <button 
+                        onClick={performUndo}
+                        className="flex items-center gap-2 text-amber-400 hover:text-amber-300 font-black text-xs uppercase transition-colors"
+                    >
+                        <RotateCcw size={16} /> تراجع (Undo)
+                    </button>
+                    <button onClick={() => setUndoState(null)} className="text-slate-500 hover:text-white"><X size={16}/></button>
+                </div>
+            </div>
         )}
       </main>
     </div>
   );
 };
 
-const App: React.FC = () => (
-  <AuthProvider><AppContent /></AuthProvider>
-);
+const AppContainer: React.FC = () => {
+  const { isAuthenticated } = useAuth();
+  return isAuthenticated ? <AuthenticatedApp /> : <Login />;
+};
+
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <AppContainer />
+    </AuthProvider>
+  );
+};
+
 export default App;

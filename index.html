@@ -3,42 +3,44 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Electro GIM Services - GIM CORE v2.0</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>GIM AE-OS | نظام المقاول الذاتي</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-      :root {
-        --brand-blue: #2563eb;
-        --brand-dark: #0f172a;
-      }
       body {
         font-family: 'Cairo', sans-serif;
         background-color: #f8fafc;
         overflow-x: hidden;
-        -webkit-print-color-adjust: exact !important;
-        print-color-adjust: exact !important;
+        -webkit-font-smoothing: antialiased;
       }
       
-      /* تخصيص السكرول بار الاحترافي */
-      ::-webkit-scrollbar {
+      /* Custom Scrollbar */
+      .custom-scrollbar::-webkit-scrollbar {
         width: 6px;
         height: 6px;
       }
-      ::-webkit-scrollbar-track {
-        background: rgba(0,0,0,0.02);
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: rgba(0,0,0,0.05);
       }
-      ::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 20px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
+      .custom-scrollbar::-webkit-scrollbar-thumb {
         background: #94a3b8;
+        border-radius: 10px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
       }
 
-      /* تأثيرات حركة متقدمة */
+      /* Dark Mode Scrollbar override for Visits page */
+      .bg-\[\#0B1120\] .custom-scrollbar::-webkit-scrollbar-track {
+        background: rgba(255,255,255,0.05);
+      }
+      .bg-\[\#0B1120\] .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #334155;
+      }
+
       @keyframes slideUp {
         from { opacity: 0; transform: translateY(20px); }
         to { opacity: 1; transform: translateY(0); }
@@ -47,31 +49,6 @@
         animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
       }
 
-      @keyframes pulse-ring {
-        0% { transform: scale(0.33); }
-        80%, 100% { opacity: 0; }
-      }
-      .pulse-indicator {
-        position: relative;
-      }
-      .pulse-indicator::before {
-        content: '';
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        border-radius: 50%;
-        background-color: inherit;
-        animation: pulse-ring 1.5s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
-      }
-
-      /* بطاقات زجاجية */
-      .glass-card {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.4);
-      }
-
-      /* تحسين الطباعة */
       @media print {
         @page { size: A4; margin: 0; }
         .no-print { display: none !important; }
@@ -85,12 +62,13 @@
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.37.0"
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0"
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
-  <body class="text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+  <body class="text-slate-900 selection:bg-blue-600 selection:text-white">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

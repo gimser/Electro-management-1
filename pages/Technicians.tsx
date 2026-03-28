@@ -6,7 +6,7 @@ import {
   AlertTriangle, Activity, Brain, ShieldAlert, X, 
   Save, Phone, Star, TrendingUp, BarChart3, Clock,
   Award, Zap, UserCheck, Trophy, Crown, Medal, 
-  ChevronRight, Sparkles, Target, Flame
+  ChevronRight, Sparkles, Target, Flame, Skull
 } from 'lucide-react';
 
 interface TechniciansPageProps {
@@ -18,6 +18,7 @@ const TechniciansPage: React.FC<TechniciansPageProps> = ({ state, updateState })
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
   const [editingTech, setEditingTech] = useState<Technician | null>(null);
+  const [selectedTechHistory, setSelectedTechHistory] = useState<Technician | null>(null);
   
   const [formData, setFormData] = useState<Omit<Technician, 'id' | 'joinDate'>>({
     name: '',
@@ -39,6 +40,42 @@ const TechniciansPage: React.FC<TechniciansPageProps> = ({ state, updateState })
     return { label: 'Rookie Tech', color: 'text-slate-500', icon: <HardHat size={14}/> };
   };
 
+  const handleDeleteAllTechs = async () => {
+    if (state.technicians.length === 0) return;
+    
+    if (window.confirm('🚨 تحذير: هل أنت متأكد من حذف جميع الفنيين (Technicians)؟')) {
+      const confirmCode = Math.floor(1000 + Math.random() * 9000).toString();
+      const userInput = window.prompt(`لتأكيد الحذف النهائي لـ ${state.technicians.length} فني، يرجى إدخال الرمز التالي: ${confirmCode}`);
+      
+      if (userInput === confirmCode) {
+        updateState(prev => ({
+          ...prev,
+          technicians: [],
+          activityLogs: [{
+            id: crypto.randomUUID(),
+            userId: 'system',
+            username: 'System',
+            action: 'ALL_TECHNICIANS_REMOVED',
+            module: 'HR',
+            timestamp: new Date().toISOString(),
+            details: `تم مسح جميع الفنيين من النظام (${state.technicians.length} سجل).`,
+            severity: 'Warning'
+          }, ...(prev.activityLogs || [])]
+        }));
+        alert('تم حذف جميع الفنيين بنجاح.');
+      }
+    }
+  };
+
+  const deleteTech = (id: string) => {
+    if (window.confirm('هل أنت متأكد من حذف هذا الفني؟')) {
+      updateState(prev => ({
+        ...prev,
+        technicians: prev.technicians.filter(t => t.id !== id)
+      }));
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingTech) {
@@ -54,7 +91,8 @@ const TechniciansPage: React.FC<TechniciansPageProps> = ({ state, updateState })
         bonusPoints: 0,
         level: 1,
         exp: 0,
-        badges: ['NEW_RECRUIT']
+        badges: ['NEW_RECRUIT'],
+        xpHistory: []
       };
       updateState(prev => ({
         ...prev,
@@ -79,7 +117,7 @@ const TechniciansPage: React.FC<TechniciansPageProps> = ({ state, updateState })
     const bonusPoints = tech.bonusPoints || 0;
     const level = tech.level || 1;
     const exp = tech.exp || 0;
-    const nextLevelExp = level * 500;
+    const nextLevelExp = level * 1000; // Updated scale
     const expPercent = Math.min(100, (exp / nextLevelExp) * 100);
     
     return { completed, active, loadLevel, rating, bonusPoints, level, exp, expPercent, nextLevelExp };
@@ -95,13 +133,18 @@ const TechniciansPage: React.FC<TechniciansPageProps> = ({ state, updateState })
       <div className="flex justify-between items-center mb-10">
         <div>
           <h2 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3">
-             <Trophy className="text-amber-500" size={32} /> حائط الأبطال والتقنيين
+             <Trophy className="text-amber-500" size={32} /> حائط الأبطال (RPG Progression)
           </h2>
           <p className="text-slate-500 font-medium">مراقبة الأداء القتالي الميداني، المستويات، ونظام المكافآت</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="bg-slate-900 text-white px-8 py-3.5 rounded-2xl font-black flex items-center gap-2 shadow-xl hover:bg-blue-600 transition-all active:scale-95">
-          <Plus size={20} /> إضافة بطل جديد
-        </button>
+        <div className="flex gap-4">
+           <button onClick={handleDeleteAllTechs} className="bg-red-600 text-white px-6 py-3.5 rounded-2xl font-black flex items-center gap-2 shadow-xl hover:bg-red-500 transition-all active:scale-95">
+             <Trash2 size={20} /> حذف الكل
+           </button>
+           <button onClick={() => setShowForm(true)} className="bg-slate-900 text-white px-8 py-3.5 rounded-2xl font-black flex items-center gap-2 shadow-xl hover:bg-blue-600 transition-all active:scale-95">
+             <Plus size={20} /> إضافة بطل جديد
+           </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -196,12 +239,12 @@ const TechniciansPage: React.FC<TechniciansPageProps> = ({ state, updateState })
                         <button onClick={() => { setEditingTech(tech); setFormData({...tech}); setShowForm(true); }} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm">
                            <Edit2 size={16} />
                         </button>
-                        <button className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-600 transition-all shadow-sm">
+                        <button onClick={() => deleteTech(tech.id)} className="p-3 bg-slate-50 text-slate-400 rounded-2xl hover:bg-red-50 hover:text-red-600 transition-all shadow-sm">
                            <Trash2 size={16} />
                         </button>
                      </div>
-                     <button className="text-[10px] font-black text-slate-400 hover:text-blue-600 flex items-center gap-2 group/btn">
-                        عرض ملف البطل <ChevronRight size={14} className="rotate-180 group-hover:-translate-x-1 transition-transform" />
+                     <button onClick={() => setSelectedTechHistory(tech)} className="text-[10px] font-black text-slate-400 hover:text-blue-600 flex items-center gap-2 group/btn">
+                        سجل النقاط <ChevronRight size={14} className="rotate-180 group-hover:-translate-x-1 transition-transform" />
                      </button>
                   </div>
                </div>
@@ -210,7 +253,37 @@ const TechniciansPage: React.FC<TechniciansPageProps> = ({ state, updateState })
         })}
       </div>
 
-      {/* Existing Form Modal remains with same logic but updated labels... */}
+      {/* History Modal */}
+      {selectedTechHistory && (
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[150] flex items-center justify-center p-4">
+              <div className="bg-white rounded-[3rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+                  <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
+                      <div>
+                          <h3 className="text-xl font-black">{selectedTechHistory.name}</h3>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">XP Log & Performance</p>
+                      </div>
+                      <button onClick={() => setSelectedTechHistory(null)} className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white hover:text-red-600 transition-all"><X size={20}/></button>
+                  </div>
+                  <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar space-y-4">
+                      {selectedTechHistory.xpHistory?.length ? selectedTechHistory.xpHistory.map((entry, idx) => (
+                          <div key={idx} className={`p-4 rounded-2xl border flex justify-between items-center ${entry.type === 'GAIN' ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+                              <div>
+                                  <p className="text-xs font-black text-slate-800">{entry.reason}</p>
+                                  <p className="text-[9px] text-slate-400">{new Date(entry.date).toLocaleString()}</p>
+                              </div>
+                              <span className={`font-black font-mono text-lg ${entry.type === 'GAIN' ? 'text-green-600' : 'text-red-600'}`}>
+                                  {entry.type === 'GAIN' ? '+' : ''}{entry.amount} XP
+                              </span>
+                          </div>
+                      )) : (
+                          <div className="text-center text-slate-400 py-10 font-bold text-xs">لا يوجد سجل نقاط حتى الآن</div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Existing Form Modal... (Code omitted for brevity as it remains similar but ensures XP history init) */}
       {showForm && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4">
            <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in duration-300 text-right">

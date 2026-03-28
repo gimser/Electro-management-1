@@ -1,6 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { AppState, DocType, Document, Client, InventoryItem, ServicePrice } from '../types';
+import { AppState, DocType, Document, Client, InventoryItem, ServicePrice, LineItem } from '../types';
+import { useAuth } from '../context/AuthContext';
 import { 
   ShieldCheck, Plus, Search, Trash2, Eye, 
   Clock, Calendar, FileText, CheckCircle2, 
@@ -9,7 +9,7 @@ import {
   Zap, Building2, User, Package, Box, SearchCode,
   DollarSign, RefreshCw, Wrench, Settings, Hammer
 } from 'lucide-react';
-import { generateDocNumber, generateSmartDocNumber } from '../db';
+import { generateDocNumber, generateSmartDocNumber, createRecord } from '../db';
 
 interface WarrantiesPageProps {
   state: AppState;
@@ -18,6 +18,7 @@ interface WarrantiesPageProps {
 }
 
 const WarrantiesPage: React.FC<WarrantiesPageProps> = ({ state, updateState, onPrint }) => {
+  const { user: authUser } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [showInventoryPicker, setShowInventoryPicker] = useState(false);
   const [showServicePicker, setShowServicePicker] = useState(false);
@@ -83,8 +84,8 @@ const WarrantiesPage: React.FC<WarrantiesPageProps> = ({ state, updateState, onP
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const count = state.documents.filter(d => d.type === formData.type).length;
-    const newDoc: Document = {
-      id: crypto.randomUUID(),
+    
+    const newDoc = createRecord<Document>({
       clientId: formData.clientId,
       type: formData.type,
       number: formData.reference,
@@ -92,26 +93,27 @@ const WarrantiesPage: React.FC<WarrantiesPageProps> = ({ state, updateState, onP
       dueDate: formData.type === DocType.GARANTIE 
         ? new Date(Date.now() + (formData.durationMonths * 30 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0]
         : undefined,
-      items: [],
+      items: [] as LineItem[],
       subtotal: formData.productPrice,
-      tva: 0,
+      tvaAmount: 0,
       total: formData.productPrice,
       status: 'Paid',
       notes: formData.notes,
       interventionDetails: formData.interventionDetails,
       warrantyPeriod: formData.type === DocType.GARANTIE ? `${formData.durationMonths} شهراً` : 'صيانة دورية'
-    };
+    });
 
     updateState(prev => ({
       ...prev,
       documents: [...prev.documents, newDoc],
-      automationLogs: [{
-         id: crypto.randomUUID(),
-         timestamp: new Date().toISOString(),
+      automationLogs: [createRecord({
          action: formData.type === DocType.GARANTIE ? 'WARRANTY_ISSUED' : 'MAINTENANCE_CERT_ISSUED',
          status: 'success',
-         details: `تم إصدار ${formData.type === DocType.GARANTIE ? 'شهادة ضمان' : 'عقد صيانة'} رقم ${newDoc.number} للزبون ${state.clients.find(c => c.id === formData.clientId)?.name}`
-      }, ...(prev.automationLogs || [])]
+         details: `تم إصدار ${formData.type === DocType.GARANTIE ? 'شهادة ضمان' : 'عقد صيانة'} رقم ${newDoc.number} للزبون ${state.clients.find(c => c.id === formData.clientId)?.name}`,
+         // adding other fields for log manually since it is UIState mostly
+         timestamp: new Date().toISOString(),
+         username: authUser?.fullName || 'System'
+      }), ...(prev.automationLogs || [])]
     }));
     setShowForm(false);
     resetFormData();

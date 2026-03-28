@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppState, ServicePrice, GIMServiceCategory } from '../types';
+import { useAuth } from '../context/AuthContext';
 import { 
   Plus, Tag, Trash2, DollarSign, Banknote, Zap, X, Save, 
   Search, Hammer, Shield, Monitor, Globe, Smartphone, 
@@ -15,6 +16,7 @@ interface PricingPageProps {
 }
 
 const PricingPage: React.FC<PricingPageProps> = ({ state, updateState }) => {
+  const { user: authUser } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
   const [editingService, setEditingService] = useState<ServicePrice | null>(null);
@@ -88,6 +90,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ state, updateState }) => {
           automationLogs: [{
              id: crypto.randomUUID(),
              timestamp: new Date().toISOString(),
+             username: authUser?.fullName || 'System',
              action: 'SERVICE_REMOVED',
              status: 'success',
              details: `تم مسح الخدمة ID: ${id} من الفهرس الرسمي.`
@@ -109,6 +112,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ state, updateState }) => {
             automationLogs: [{
                id: crypto.randomUUID(),
                timestamp: new Date().toISOString(),
+               username: authUser?.fullName || 'System',
                action: 'INDEX_PURGED_COMPLETELY',
                status: 'success',
                details: 'قام المسؤول بتطهير فهرس الخدمات بالكامل.'

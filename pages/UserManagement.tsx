@@ -1,12 +1,11 @@
-
 import React, { useState } from 'react';
-import { AppState, AppUser, UserRole, ActivityLog } from '../types';
+import { AppState, AppUser, UserRole, Technician } from '../types';
 import { 
-  Users, Shield, ShieldAlert, UserPlus, Trash2, 
-  Lock, Unlock, Eye, EyeOff, Activity, Search, 
-  X, Save, CheckCircle2, UserCog, History, Edit2,
-  Mail, Calendar, Fingerprint, ShieldCheck
+  ShieldCheck, UserPlus, Users, Fingerprint, Trash2, Edit2, X, Save, Lock, Key, Copy, Eye, EyeOff, 
+  CheckCircle2, AlertTriangle, Phone, Wrench, Briefcase, BadgeCheck, User
 } from 'lucide-react';
+import { createRecord } from '../db';
+import { useAuth } from '../context/AuthContext';
 
 interface UserManagementProps {
   state: AppState;
@@ -14,372 +13,554 @@ interface UserManagementProps {
 }
 
 const UserManagement: React.FC<UserManagementProps> = ({ state, updateState }) => {
-  const [activeTab, setActiveTab] = useState<'users' | 'logs'>('users');
+  const { user: currentUser, updateUser } = useAuth();
   const [showForm, setShowForm] = useState(false);
-  const [search, setSearch] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [viewingUser, setViewingUser] = useState<AppUser | null>(null);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
-  
-  const [formData, setFormData] = useState<Omit<AppUser, 'id' | 'createdAt'>>({
+  const [selectedCredentials, setSelectedCredentials] = useState<AppUser | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle');
+
+  const [formData, setFormData] = useState({
     username: '',
     fullName: '',
     email: '',
-    password: '',
-    role: 'Technician',
-    status: 'Active'
+    phone: '',
+    role: 'Technician' as UserRole,
+    password: '', 
   });
 
-  const roles: UserRole[] = ['SuperAdmin', 'Manager', 'Supervisor', 'Technician', 'Marketing', 'Office'];
+  const [passwordStrength, setPasswordStrength] = useState(0);
 
-  const logAction = (action: string, details: string, severity: ActivityLog['severity'] = 'Info') => {
-    const newLog: ActivityLog = {
-      id: crypto.randomUUID(),
-      userId: 'system', 
-      username: 'admin',
-      action,
-      module: 'USER_ADMIN',
-      timestamp: new Date().toLocaleString('ar-MA'),
-      details,
-      severity
-    };
-    updateState(prev => ({
-      ...prev,
-      activityLogs: [newLog, ...(prev.activityLogs || [])]
-    }));
+  const calculatePasswordStrength = (pass: string) => {
+    let score = 0;
+    if (pass.length > 6) score++;
+    if (pass.length > 10) score++;
+    if (/[A-Z]/.test(pass)) score++;
+    if (/[0-9]/.test(pass)) score++;
+    if (/[^A-Za-z0-9]/.test(pass)) score++;
+    setPasswordStrength(score);
   };
 
-  const handleEditClick = (user: AppUser) => {
+  const handleFullNameChange = (name: string) => {
+    setFormData(prev => {
+      const newData = { ...prev, fullName: name };
+      // Auto-generate username if it's empty or was previously auto-generated
+      const suggestedUsername = name
+        .toLowerCase()
+        .trim()
+        .replace(/\s+/g, '.')
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+      
+      if (!prev.username || prev.username === prev.fullName.toLowerCase().trim().replace(/\s+/g, '.')) {
+        newData.username = suggestedUsername;
+      }
+      return newData;
+    });
+  };
+
+  const roles: { role: UserRole; icon: any; color: string }[] = [
+    { role: 'CEO', icon: ShieldCheck, color: 'text-slate-900' },
+    { role: 'Manager', icon: Fingerprint, color: 'text-blue-600' },
+    { role: 'Accountant', icon: Key, color: 'text-amber-600' },
+    { role: 'Technician', icon: Wrench, color: 'text-purple-600' },
+    { role: 'Sales', icon: Users, color: 'text-emerald-600' },
+  ];
+
+  const resetForm = () => {
+    setEditingUser(null);
+    setFormData({
+      username: '',
+      fullName: '',
+      email: '',
+      phone: '',
+      role: 'Technician',
+      password: '',
+    });
+    setSaveStatus('idle');
+    setPasswordStrength(0);
+  };
+
+  const handleEdit = (user: AppUser) => {
     setEditingUser(user);
     setFormData({
       username: user.username,
       fullName: user.fullName,
-      email: user.email,
-      password: user.password || '',
+      email: user.email || '',
+      phone: user.phone || '',
       role: user.role,
-      status: user.status
+      password: user.password || '',
     });
     setShowForm(true);
   };
 
+  const generatePassword = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    let pass = '';
+    for (let i = 0; i < 12; i++) {
+      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setFormData(prev => ({ ...prev, password: pass }));
+  };
+
+  const getRoleDescription = (role: UserRole) => {
+    switch (role) {
+      case 'CEO': return 'صلاحيات كاملة للنظام والتقارير المالية.';
+      case 'Manager': return 'إدارة العمليات، الموظفين، والزبائن.';
+      case 'Accountant': return 'إدارة الفواتير، المصاريف، والتقارير المحاسبية.';
+      case 'Technician': return 'الوصول للمهام الميدانية، التدخلات التقنية، والـ Smart Home.';
+      case 'Sales': return 'إدارة المبيعات (POS)، العروض، والزبائن.';
+      default: return '';
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (editingUser) {
-      // منطق التحديث
+    if (!formData.username || !formData.fullName || !formData.password) return alert('يرجى ملء كافة البيانات الحيوية للنظام');
+
+    setSaveStatus('saving');
+
+    // محاكاة تأخير بسيط لإعطاء شعور بالمعالجة
+    setTimeout(() => {
+        if (editingUser) {
+            // تحديث مستخدم موجود
+            const updatedUser = {
+                ...editingUser,
+                username: formData.username.trim(),
+                fullName: formData.fullName.trim(),
+                email: formData.email.trim(),
+                phone: formData.phone.trim(),
+                role: formData.role,
+                password: formData.password
+            };
+
+            updateState(prev => ({
+                ...prev,
+                users: prev.users.map(u => u.id === editingUser.id ? updatedUser : u)
+            }));
+
+            // إذا كان المستخدم المعدل هو المستخدم الحالي، قم بتحديث السياق
+            if (currentUser && currentUser.id === updatedUser.id) {
+                updateUser(updatedUser);
+            }
+        } else {
+            // 1. تكوين كائن المستخدم الجديد
+            const newUser = createRecord<AppUser>({
+              username: formData.username.trim(),
+              fullName: formData.fullName.trim(),
+              email: formData.email.trim(),
+              phone: formData.phone.trim(),
+              role: formData.role,
+              status: 'Active',
+              password: formData.password 
+            });
+
+            // 2. تحديث الحالة المركزية (Core State Update)
+            updateState(prev => {
+              let technicians = [...prev.technicians];
+              let logs = [...(prev.activityLogs || [])];
+              
+              // الذكاء التشغيلي: إنشاء ملف تقني تلقائياً
+              if (formData.role === 'Technician') {
+                const newTech = createRecord<Technician>({
+                  name: formData.fullName,
+                  phone: formData.phone.trim(),
+                  specialty: (formData as any).specialty || 'Security & Networks',
+                  status: 'Active',
+                  joinDate: new Date().toISOString().split('T')[0],
+                  maxDailyTasks: 5,
+                  performanceRating: 100, // بداية ممتازة
+                  bonusPoints: 0,
+                  level: 1,
+                  exp: 0,
+                  badges: ['NEW_RECRUIT']
+                });
+                newTech.id = newUser.id; 
+
+                technicians.push(newTech);
+                
+                logs.unshift(createRecord({
+                    userId: currentUser?.id || 'system',
+                    username: currentUser?.fullName || 'System',
+                    action: 'AUTO_PROFILE_LINK',
+                    module: 'HR',
+                    timestamp: new Date().toISOString(),
+                    details: `تم إنشاء ملف تقني ميداني تلقائياً للمستخدم: ${newUser.fullName}`,
+                    severity: 'Info'
+                }));
+              }
+
+              logs.unshift(createRecord({
+                userId: currentUser?.id || 'system',
+                username: currentUser?.fullName || 'System',
+                action: 'USER_CREATED',
+                module: 'HR',
+                timestamp: new Date().toISOString(),
+                details: `تم إضافة مستخدم جديد للنظام: ${newUser.fullName} (${newUser.role})`,
+                severity: 'Info'
+              }));
+
+              return {
+                ...prev,
+                users: [...prev.users, newUser],
+                technicians: technicians,
+                activityLogs: logs
+              };
+            });
+        }
+
+        setSaveStatus('success');
+        
+        // إعادة التعيين بعد النجاح
+        setTimeout(() => {
+            setShowForm(false);
+            setEditingUser(null);
+            setFormData({ username: '', fullName: '', email: '', phone: '', role: 'Technician', password: '' });
+            setSaveStatus('idle');
+        }, 1500);
+    }, 800);
+  };
+
+  const deleteUser = (id: string) => {
+    if (confirm('تنبيه أمني: هل أنت متأكد من سحب صلاحيات هذا المستخدم؟')) {
       updateState(prev => ({
         ...prev,
-        users: prev.users.map(u => u.id === editingUser.id ? { ...u, ...formData } : u)
+        users: prev.users.filter(u => u.id !== id),
+        // ملاحظة: لا نحذف ملف التقني للحفاظ على سجل التدخلات التاريخي (Data Integrity)
       }));
-      logAction('UPDATE_USER', `تم تحديث بيانات المستخدم: ${formData.username} (${formData.role})`, 'Info');
-    } else {
-      // منطق الإضافة الجديدة
-      const newUser: AppUser = {
-        ...formData,
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString()
-      };
-      updateState(prev => ({
-        ...prev,
-        users: [...prev.users, newUser]
-      }));
-      logAction('CREATE_USER', `تم إنشاء مستخدم جديد: ${newUser.username} بدور ${newUser.role}`, 'Info');
     }
-    
-    setShowForm(false);
-    resetForm();
   };
 
-  const resetForm = () => {
-    setFormData({ username: '', fullName: '', email: '', password: '', role: 'Technician', status: 'Active' });
-    setShowPassword(false);
-    setEditingUser(null);
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert('تم نسخ البيانات للحافظة');
   };
-
-  const toggleUserStatus = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const user = state.users.find(u => u.id === id);
-    if (!user) return;
-    const newStatus = user.status === 'Active' ? 'Disabled' : 'Active';
-    updateState(prev => ({
-      ...prev,
-      users: prev.users.map(u => u.id === id ? { ...u, status: newStatus } : u)
-    }));
-    logAction('TOGGLE_USER_STATUS', `تم ${newStatus === 'Active' ? 'تفعيل' : 'تعطيل'} حساب المستخدم: ${user.username}`, newStatus === 'Disabled' ? 'Warning' : 'Info');
-  };
-
-  const deleteUser = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const user = state.users.find(u => u.id === id);
-    if (confirm(`هل أنت متأكد من حذف حساب "${user?.fullName}" نهائياً؟ لا يمكن التراجع عن هذا الإجراء.`)) {
-      updateState(prev => ({
-        ...prev,
-        users: prev.users.filter(u => u.id !== id)
-      }));
-      logAction('DELETE_USER', `تم حذف حساب المستخدم: ${user?.username}`, 'Critical');
-    }
-  };
-
-  const filteredUsers = (state.users || []).filter(u => 
-    u.username.toLowerCase().includes(search.toLowerCase()) || 
-    u.fullName.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
-  );
 
   return (
-    <div className="p-8 animate-in fade-in duration-500 pb-24 text-right" dir="rtl">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10">
-        <div>
-          <h2 className="text-3xl font-black text-slate-800 flex items-center gap-3">
-             <Shield className="text-blue-600" size={32} /> إدارة الكادر البشري والأمن
-          </h2>
-          <p className="text-slate-500 font-medium">التحكم في هويات الولوج، تعديل الصلاحيات ومراقبة بروتوكولات الدخول</p>
-        </div>
-        <div className="flex flex-wrap gap-4">
-           <div className="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-sm flex">
-              <button 
-                onClick={() => setActiveTab('users')}
-                className={`px-6 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeTab === 'users' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}
-              >
-                <Users size={16} /> الموظفين
-              </button>
-              <button 
-                onClick={() => setActiveTab('logs')}
-                className={`px-6 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 ${activeTab === 'logs' ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-400'}`}
-              >
-                <History size={16} /> سجل الأمان
-              </button>
+    <div className="p-8 animate-in fade-in duration-500 text-right font-arabic" dir="rtl">
+      <div className="max-w-7xl mx-auto space-y-10">
+        
+        {/* Header */}
+        <div className="flex justify-between items-center bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
+           <div>
+              <h2 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-3">
+                 <Users className="text-blue-600" size={28} /> مركز إدارة الهوية والصلاحيات
+              </h2>
+              <p className="text-slate-500 font-bold text-xs mt-1">التحكم المركزي في حسابات الموظفين وسجلات الدخول</p>
            </div>
-           {activeTab === 'users' && (
-              <button onClick={() => { resetForm(); setShowForm(true); }} className="bg-blue-600 text-white px-8 py-2.5 rounded-2xl font-black flex items-center gap-2 shadow-xl hover:bg-blue-700 transition-all">
-                <UserPlus size={18} /> إضافة مستخدم
-              </button>
-           )}
+           <button 
+             onClick={() => setShowForm(true)}
+             className="bg-slate-900 text-white px-8 py-3.5 rounded-2xl font-black flex items-center gap-2 shadow-xl hover:bg-blue-600 transition-all active:scale-95 text-xs uppercase tracking-widest"
+           >
+              <UserPlus size={18} /> تسجيل موظف جديد
+           </button>
         </div>
-      </div>
 
-      {activeTab === 'users' ? (
-        <div className="space-y-6">
-           <div className="relative max-w-xl">
-              <Search className="absolute right-4 top-3.5 text-slate-400" size={20} />
-              <input 
-                className="w-full pr-12 pl-6 py-4 bg-white border border-slate-200 rounded-3xl font-bold shadow-sm focus:ring-4 focus:ring-blue-500/10 outline-none transition-all" 
-                placeholder="ابحث بالاسم، اسم المستخدم أو البريد..." 
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
-           </div>
+        {/* Users Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+           {state.users.map((user, idx) => (
+              <div key={idx} className="bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden">
+                 {/* Role Badge */}
+                 <div className="absolute top-6 left-6">
+                    <span className={`text-[9px] font-black px-3 py-1 rounded-full border uppercase tracking-widest inline-flex items-center gap-1 ${user.role === 'CEO' ? 'bg-slate-900 text-white border-slate-900' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                        {user.role}
+                    </span>
+                 </div>
 
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredUsers.map(user => (
-                <div 
-                  key={user.id} 
-                  onClick={() => setViewingUser(user)}
-                  className={`bg-white rounded-[2.5rem] border border-slate-200 p-8 shadow-sm hover:shadow-xl transition-all relative overflow-hidden group cursor-pointer ${user.status === 'Disabled' && 'opacity-60'}`}
-                >
-                   <div className="flex justify-between items-start mb-6">
-                      <div className="w-16 h-16 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-2xl shadow-lg uppercase group-hover:bg-blue-600 transition-colors">
-                         {user.username.charAt(0)}
-                      </div>
-                      <div className="flex gap-2">
-                         <button onClick={(e) => { e.stopPropagation(); handleEditClick(user); }} className="p-2.5 bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white rounded-xl transition-all shadow-sm">
-                            <Edit2 size={16} />
-                         </button>
-                         <button onClick={(e) => toggleUserStatus(user.id, e)} className={`p-2.5 rounded-xl border transition-all ${user.status === 'Active' ? 'text-green-600 bg-green-50 hover:bg-green-600 hover:text-white' : 'text-red-600 bg-red-50 hover:bg-red-600 hover:text-white'}`}>
-                            {user.status === 'Active' ? <Unlock size={16} /> : <Lock size={16} />}
-                         </button>
-                         <button onClick={(e) => deleteUser(user.id, e)} className="p-2.5 text-slate-300 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all">
-                            <Trash2 size={16} />
-                         </button>
-                      </div>
-                   </div>
-                   <div className="space-y-4">
-                      <div>
-                         <h3 className="text-xl font-black text-slate-800">{user.fullName}</h3>
-                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">@{user.username}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                         <ShieldCheck size={14} className="text-blue-500" />
-                         <span className="text-xs font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg uppercase">{user.role}</span>
-                      </div>
-                      <div className="pt-6 border-t border-slate-50 flex justify-between items-center">
-                         <div className="flex flex-col">
-                            <span className="text-[9px] font-black text-slate-400 uppercase">حالة الحساب</span>
-                            <span className={`text-[10px] font-black ${user.status === 'Active' ? 'text-green-600' : 'text-red-600'}`}>{user.status === 'Active' ? 'مفعل ونشط' : 'معطل إدارياً'}</span>
-                         </div>
-                         <div className="text-left flex flex-col items-end">
-                            <button className="text-[9px] font-black text-blue-600 uppercase hover:underline flex items-center gap-1">عرض الملف <Eye size={10} /></button>
-                         </div>
-                      </div>
-                   </div>
-                </div>
-              ))}
-           </div>
-        </div>
-      ) : (
-        <div className="bg-slate-900 rounded-[3rem] p-10 text-white shadow-2xl border-4 border-slate-800 min-h-[600px] flex flex-col relative overflow-hidden">
-           <div className="flex justify-between items-center mb-10 border-b border-white/10 pb-6 relative z-10">
-              <h3 className="text-2xl font-black flex items-center gap-3"><Activity size={24} className="text-blue-400" /> سجل الرقابة والنشاطات الأمنية</h3>
-              <div className="text-[10px] font-mono text-slate-500 tracking-widest">GIM-SEC-SHIELD-V2.5 &gt;_</div>
-           </div>
-           
-           <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar relative z-10">
-              {state.activityLogs && state.activityLogs.length > 0 ? (
-                state.activityLogs.map((log) => (
-                  <div key={log.id} className="bg-white/5 border border-white/10 p-5 rounded-2xl animate-in slide-in-from-bottom-2 flex gap-4 text-right">
-                     <div className={`mt-1 ${log.severity === 'Critical' ? 'text-red-500' : log.severity === 'Warning' ? 'text-amber-500' : 'text-blue-400'}`}>
-                        {log.severity === 'Critical' ? <ShieldAlert size={20} /> : <CheckCircle2 size={20} />}
-                     </div>
-                     <div className="flex-1">
-                        <div className="flex justify-between items-center mb-1">
-                           <div className="flex items-center gap-2">
-                              <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">{log.action}</span>
-                              <span className="text-[9px] text-slate-500 font-bold bg-white/5 px-2 py-0.5 rounded">بواسطة: {log.username}</span>
-                           </div>
-                           <span className="text-[9px] text-slate-500 font-mono">{log.timestamp}</span>
-                        </div>
-                        <p className="text-xs font-medium text-slate-200">{log.details}</p>
-                     </div>
-                  </div>
-                ))
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-slate-700 opacity-30 py-20">
-                   <Activity size={80} className="mb-4" />
-                   <p className="font-black text-xl uppercase tracking-tighter">لا توجد سجلات أمان حالياً.</p>
-                </div>
-              )}
-           </div>
-        </div>
-      )}
+                 <div className="flex items-center gap-5 relative z-10 mt-2">
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-inner ${user.role === 'CEO' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                       {user.username.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="space-y-1">
+                       <h3 className="text-lg font-black text-slate-800 line-clamp-1">{user.fullName}</h3>
+                       <p className="text-[10px] font-bold text-slate-400 font-mono">{user.email || 'No Email'}</p>
+                       <p className="text-[9px] font-bold text-green-600 flex items-center gap-1"><span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Active Account</p>
+                    </div>
+                 </div>
 
-      {/* مودال العرض (User Detail View) */}
-      {viewingUser && (
-        <div className="fixed inset-0 bg-[#0f172a]/95 backdrop-blur-xl z-[200] flex items-center justify-center p-4">
-           <div className="bg-white rounded-[4rem] w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in duration-300 text-right">
-              <div className="relative h-32 bg-slate-900 overflow-hidden">
-                 <div className="absolute top-0 right-0 w-full h-full bg-[radial-gradient(circle_at_20%_20%,rgba(37,99,235,0.2),transparent)]"></div>
-                 <button onClick={() => setViewingUser(null)} className="absolute top-6 left-6 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-red-500 transition-all z-20"><X size={20}/></button>
+                 <div className="flex justify-between mt-8 pt-6 border-t border-slate-50 opacity-80 group-hover:opacity-100 transition-opacity">
+                    <div className="text-[10px] font-bold text-slate-400">
+                        Login: <span className="text-slate-800 font-mono">{user.username}</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <button 
+                           onClick={() => handleEdit(user)} 
+                           className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-xl hover:bg-blue-50 transition-colors"
+                           title="تعديل البيانات"
+                        >
+                           <Edit2 size={16} />
+                        </button>
+                        <button 
+                           onClick={() => { setSelectedCredentials(user); setShowPassword(false); }} 
+                           className="p-2 text-slate-400 hover:text-amber-500 bg-slate-50 rounded-xl hover:bg-amber-50 transition-colors"
+                           title="كشف كلمة المرور"
+                        >
+                           <Key size={16} />
+                        </button>
+                        {user.role !== 'CEO' && (
+                          <button onClick={() => deleteUser(user.id)} className="p-2 text-slate-400 hover:text-red-600 bg-slate-50 rounded-xl hover:bg-red-50 transition-colors"><Trash2 size={16} /></button>
+                        )}
+                    </div>
+                 </div>
               </div>
-              <div className="px-10 pb-10 -mt-12 relative z-10">
-                 <div className="w-24 h-24 rounded-3xl bg-blue-600 text-white flex items-center justify-center text-4xl font-black shadow-2xl border-4 border-white mb-6">
-                    {viewingUser.username.charAt(0).toUpperCase()}
-                 </div>
-                 <div className="mb-8">
-                    <h3 className="text-3xl font-black text-slate-900">{viewingUser.fullName}</h3>
-                    <p className="text-slate-400 font-bold">معرف الدخول: @{viewingUser.username}</p>
-                 </div>
-                 
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
-                    <div className="p-5 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">
-                       <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-blue-600"><Mail size={18}/></div>
-                       <div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase">البريد الإلكتروني</p>
-                          <p className="text-xs font-bold text-slate-800">{viewingUser.email}</p>
-                       </div>
-                    </div>
-                    <div className="p-5 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">
-                       <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-amber-600"><Fingerprint size={18}/></div>
-                       <div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase">الدور الوظيفي</p>
-                          <p className="text-xs font-bold text-slate-800">{viewingUser.role}</p>
-                       </div>
-                    </div>
-                    <div className="p-5 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">
-                       <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-green-600"><Calendar size={18}/></div>
-                       <div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase">تاريخ الإنشاء</p>
-                          <p className="text-xs font-bold text-slate-800">{new Date(viewingUser.createdAt).toLocaleDateString('ar-MA')}</p>
-                       </div>
-                    </div>
-                    <div className="p-5 bg-slate-50 rounded-3xl border border-slate-100 flex items-center gap-4">
-                       <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center text-purple-600"><Shield size={18}/></div>
-                       <div>
-                          <p className="text-[9px] font-black text-slate-400 uppercase">حالة الولوج</p>
-                          <p className={`text-xs font-bold ${viewingUser.status === 'Active' ? 'text-green-600' : 'text-red-600'}`}>{viewingUser.status === 'Active' ? 'مسموح بالدخول' : 'ممنوع من الولوج'}</p>
-                       </div>
-                    </div>
-                 </div>
+           ))}
+        </div>
 
-                 <div className="flex gap-4">
-                    <button onClick={() => { setViewingUser(null); handleEditClick(viewingUser); }} className="flex-1 bg-slate-900 text-white font-black py-4 rounded-2xl shadow-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-2">
-                       <Edit2 size={18} /> تعديل البيانات
+        {/* Credentials Modal */}
+        {selectedCredentials && (
+           <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+              <div className="bg-white rounded-[3rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in duration-300">
+                 <div className="p-8 bg-amber-50 border-b border-amber-100 flex justify-between items-center">
+                    <div className="flex items-center gap-3 text-amber-700">
+                       <div className="bg-white p-2 rounded-xl shadow-sm"><Lock size={20} /></div>
+                       <div>
+                           <h3 className="text-lg font-black">بيانات الدخول الآمنة</h3>
+                           <p className="text-[10px] opacity-70">Top Secret Credentials</p>
+                       </div>
+                    </div>
+                    <button onClick={() => setSelectedCredentials(null)} className="w-8 h-8 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400 hover:text-red-600 transition-all">
+                       <X size={18} />
                     </button>
                  </div>
-              </div>
-           </div>
-        </div>
-      )}
-
-      {/* مودال الإضافة والتعديل (Add/Edit Form) */}
-      {showForm && (
-        <div className="fixed inset-0 bg-[#0f172a]/95 backdrop-blur-xl z-[200] flex items-center justify-center p-4">
-           <div className="bg-white rounded-[3rem] w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in duration-300 text-right">
-              <div className="p-8 bg-blue-50 border-b border-blue-100 flex justify-between items-center">
-                 <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-500/20">
-                       <UserCog size={24} />
+                 <div className="p-10 space-y-6">
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">اسم المستخدم (Login)</label>
+                       <div className="flex items-center gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                          <span className="flex-1 font-black font-mono text-lg text-slate-800">{selectedCredentials.username}</span>
+                          <button onClick={() => copyToClipboard(selectedCredentials.username)} className="text-slate-400 hover:text-blue-600"><Copy size={16}/></button>
+                       </div>
                     </div>
-                    <div>
-                       <h3 className="text-2xl font-black text-slate-800 tracking-tighter uppercase">{editingUser ? 'تعديل بيانات الحساب' : 'إنشاء حساب جديد'}</h3>
-                       <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mt-1">GIM Access Protocol V2</p>
-                    </div>
-                 </div>
-                 <button onClick={() => { setShowForm(false); resetForm(); }} className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400 hover:text-red-600 transition-all">
-                    <X size={24} />
-                 </button>
-              </div>
-              <form onSubmit={handleSubmit} className="p-10 space-y-6">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                       <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest mr-2">اسم المستخدم (Login)</label>
-                       <input required className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="yassine_gim" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
-                    </div>
-                    <div>
-                       <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest mr-2">الاسم الكامل</label>
-                       <input required className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none" placeholder="ياسين العلوي" value={formData.fullName} onChange={e => setFormData({...formData, fullName: e.target.value})} />
-                    </div>
-                    <div className="md:col-span-2">
-                       <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest mr-2">كلمة المرور السرية</label>
-                       <div className="relative">
-                          <input 
-                            required 
-                            type={showPassword ? "text" : "password"} 
-                            className="w-full px-5 py-3.5 bg-blue-50 border border-blue-100 rounded-2xl font-black text-blue-700 focus:ring-2 focus:ring-blue-500 outline-none pr-12" 
-                            placeholder="••••••••" 
-                            value={formData.password} 
-                            onChange={e => setFormData({...formData, password: e.target.value})} 
-                          />
-                          <button 
-                            type="button" 
-                            onClick={() => setShowPassword(!showPassword)}
-                            className="absolute right-4 top-3.5 text-slate-400 hover:text-blue-600 transition-colors"
-                          >
-                             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">كلمة المرور (Access Key)</label>
+                       <div className="flex items-center gap-2 bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                          <span className="flex-1 font-black font-mono text-lg text-slate-800 tracking-wider">
+                             {showPassword ? (selectedCredentials.password || 'غير محددة') : '••••••••••••'}
+                          </span>
+                          <button onClick={() => setShowPassword(!showPassword)} className="text-slate-400 hover:text-blue-600">
+                             {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
                           </button>
+                          <button onClick={() => copyToClipboard(selectedCredentials.password || '')} className="text-slate-400 hover:text-blue-600"><Copy size={16}/></button>
                        </div>
                     </div>
-                    <div className="md:col-span-2">
-                       <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest mr-2">البريد الإلكتروني الرسمي</label>
-                       <input type="email" required className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-                    </div>
-                    <div className="md:col-span-2">
-                       <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 tracking-widest mr-2">الدور والصلاحيات (Role)</label>
-                       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                          {roles.map(r => (
-                            <button key={r} type="button" onClick={() => setFormData({...formData, role: r})} className={`py-3 rounded-xl font-black text-[10px] border transition-all ${formData.role === r ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
-                               {r}
-                            </button>
-                          ))}
-                       </div>
+                    <div className="bg-blue-50 p-4 rounded-2xl flex gap-3">
+                        <AlertTriangle size={20} className="text-blue-600 shrink-0" />
+                        <p className="text-[10px] font-bold text-blue-800 leading-relaxed">
+                           يرجى مشاركة هذه البيانات مع الموظف المعني عبر قناة آمنة. النظام يقوم بحفظ البيانات محلياً ومشفرة لضمان الخصوصية.
+                        </p>
                     </div>
                  </div>
-                 <button type="submit" className="w-full bg-slate-900 text-white font-black py-5 rounded-[2rem] shadow-2xl flex items-center justify-center gap-3 hover:bg-blue-600 transition-all uppercase tracking-[0.2em] text-xs mt-4">
-                    <Save size={20} /> {editingUser ? 'تثبيت التغييرات الجديدة' : 'تثبيت الحساب في قاعدة البيانات'}
-                 </button>
-              </form>
+              </div>
            </div>
-        </div>
-      )}
+        )}
+
+        {/* Add User Modal */}
+        {showForm && (
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto">
+             <div className="bg-white rounded-[3rem] w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in duration-300 my-8">
+                <div className="p-8 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                   <div>
+                      <h3 className="text-2xl font-black text-slate-800">{editingUser ? 'تعديل بيانات العضو' : 'إضافة عضو للفريق'}</h3>
+                      <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mt-1">System Enrollment Protocol</p>
+                   </div>
+                   <button onClick={() => { setShowForm(false); setEditingUser(null); }} className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-400 hover:text-red-600 transition-all">
+                      <X size={24} />
+                   </button>
+                </div>
+                
+                <form onSubmit={handleSubmit} className="p-10 space-y-10">
+                   {/* Section 1: Personal Info */}
+                   <div className="space-y-6">
+                      <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                         <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center font-black text-xs">01</div>
+                         <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">المعلومات الشخصية</h4>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div className="md:col-span-2">
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 mr-2">الاسم الكامل</label>
+                            <div className="relative">
+                               <User className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                               <input 
+                               required 
+                               className="w-full pl-6 pr-12 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
+                               placeholder="مثال: أحمد العلمي" 
+                               value={formData.fullName} 
+                               onChange={e => handleFullNameChange(e.target.value)} 
+                             />
+                            </div>
+                         </div>
+                         <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 mr-2">البريد الإلكتروني</label>
+                            <input type="email" className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none text-left transition-all" placeholder="email@gim.ma" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                         </div>
+                         <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 mr-2">رقم الهاتف</label>
+                            <div className="relative">
+                               <Phone className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                               <input className="w-full pl-6 pr-12 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none text-left transition-all" placeholder="06XXXXXXXX" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
+                            </div>
+                         </div>
+                      </div>
+                   </div>
+
+                   {/* Section 2: Account Security */}
+                   <div className="space-y-6">
+                      <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                         <div className="w-8 h-8 bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center font-black text-xs">02</div>
+                         <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">أمان الحساب</h4>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                         <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 mr-2">اسم المستخدم (Login)</label>
+                            <input required className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="ahmed.alami" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} />
+                         </div>
+                         <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 mr-2 flex items-center justify-between">
+                               <span>كلمة المرور</span>
+                               <div className="flex gap-2">
+                                  <button type="button" onClick={() => copyToClipboard(formData.password)} className="text-slate-400 hover:text-blue-600 lowercase font-bold flex items-center gap-1">
+                                     <Copy size={12} /> نسخ
+                                  </button>
+                                  <button type="button" onClick={generatePassword} className="text-blue-600 hover:underline lowercase font-bold">توليد تلقائي</button>
+                               </div>
+                            </label>
+                            <div className="relative">
+                               <input 
+                                 type={showPassword ? "text" : "password"} 
+                                 required 
+                                 className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none text-left transition-all pr-12" 
+                                 placeholder="••••••••" 
+                                 value={formData.password} 
+                                 onChange={e => {
+                                   setFormData({...formData, password: e.target.value});
+                                   calculatePasswordStrength(e.target.value);
+                                 }} 
+                               />
+                               <button 
+                                 type="button" 
+                                 onClick={() => setShowPassword(!showPassword)}
+                                 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                               >
+                                  {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+                               </button>
+                            </div>
+                            {formData.password && (
+                               <div className="mt-2 space-y-1 px-2">
+                                 <div className="flex gap-1">
+                                   {[1, 2, 3, 4, 5].map((step) => (
+                                     <div 
+                                       key={step} 
+                                       className={`h-1 flex-1 rounded-full transition-all ${
+                                         passwordStrength >= step 
+                                           ? passwordStrength <= 2 ? 'bg-red-500' : passwordStrength <= 4 ? 'bg-amber-500' : 'bg-green-500'
+                                           : 'bg-slate-200'
+                                       }`}
+                                     />
+                                   ))}
+                                 </div>
+                                 <p className={`text-[9px] font-bold ${
+                                   passwordStrength <= 2 ? 'text-red-500' : passwordStrength <= 4 ? 'text-amber-500' : 'text-green-500'
+                                 }`}>
+                                   {passwordStrength <= 2 ? 'كلمة مرور ضعيفة' : passwordStrength <= 4 ? 'كلمة مرور متوسطة' : 'كلمة مرور قوية جداً'}
+                                 </p>
+                               </div>
+                             )}
+                         </div>
+                      </div>
+                   </div>
+
+                   {/* Section 3: Access Level */}
+                   <div className="space-y-6">
+                      <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                         <div className="w-8 h-8 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center font-black text-xs">03</div>
+                         <h4 className="text-sm font-black text-slate-800 uppercase tracking-tight">مستوى الوصول (الصلاحيات)</h4>
+                      </div>
+                      <div className="space-y-4">
+                         <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 mr-2">الدور الوظيفي</label>
+                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {roles.map(({ role: r, icon: Icon, color }) => (
+                               <button
+                                 key={r}
+                                 type="button"
+                                 onClick={() => setFormData({...formData, role: r})}
+                                 className={`p-4 rounded-2xl border-2 text-right transition-all group relative overflow-hidden ${formData.role === r ? 'border-blue-600 bg-blue-50' : 'border-slate-100 hover:border-blue-200 bg-white'}`}
+                               >
+                                  <div className="flex items-center justify-between mb-2">
+                                     <div className={`p-2 rounded-xl ${formData.role === r ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-400 group-hover:text-blue-600 group-hover:bg-blue-50'}`}>
+                                        <Icon size={18} />
+                                     </div>
+                                     {formData.role === r && <CheckCircle2 size={16} className="text-blue-600" />}
+                                  </div>
+                                  <span className={`text-xs font-black block mb-1 ${formData.role === r ? 'text-blue-700' : 'text-slate-700'}`}>{r}</span>
+                                  <p className={`text-[9px] font-bold leading-relaxed ${formData.role === r ? 'text-blue-600/70' : 'text-slate-400'}`}>
+                                     {getRoleDescription(r)}
+                                  </p>
+                               </button>
+                            ))}
+                         </div>
+                      </div>
+                   </div>
+
+                   {formData.role === 'Technician' && (
+                       <div className="space-y-6 animate-in slide-in-from-top-2">
+                           <div className="bg-blue-50 p-5 rounded-3xl flex flex-col gap-4 border border-blue-100">
+                               <div className="flex items-center gap-4">
+                                   <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm shrink-0">
+                                      <ShieldCheck className="text-blue-600" size={24} />
+                                   </div>
+                                   <p className="text-[11px] font-bold text-blue-800 leading-relaxed">
+                                       <span className="block text-xs font-black mb-0.5">ملاحظة تقنية:</span>
+                                       سيتم إنشاء ملف تعريف "تقني ميداني" تلقائياً لهذا المستخدم للظهور في جدول المهام والتدخلات.
+                                   </p>
+                               </div>
+                               
+                               <div className="space-y-2">
+                                   <label className="block text-[10px] font-black text-blue-600 uppercase tracking-widest mr-2">تخصص التقني</label>
+                                   <select 
+                                       className="w-full px-6 py-3 bg-white border border-blue-200 rounded-2xl font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                                       value={(formData as any).specialty || 'Security & Networks'}
+                                       onChange={e => setFormData({...formData, specialty: e.target.value} as any)}
+                                   >
+                                       <option value="Security & Networks">Security & Networks</option>
+                                       <option value="Web & Apps">Web & Apps</option>
+                                       <option value="Smart Home">Smart Home</option>
+                                       <option value="GIM Store">GIM Store</option>
+                                       <option value="Consulting">Consulting</option>
+                                       <option value="Cyber Security">Cyber Security</option>
+                                   </select>
+                               </div>
+                           </div>
+                       </div>
+                   )}
+
+                   <div className="flex gap-4">
+                     <button 
+                       type="submit" 
+                       disabled={saveStatus !== 'idle'}
+                       className={`flex-1 text-white font-black py-6 rounded-[2.5rem] shadow-2xl transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-3 active:scale-95 ${saveStatus === 'success' ? 'bg-green-600' : 'bg-slate-900 hover:bg-blue-600'}`}
+                     >
+                        {saveStatus === 'success' ? (
+                            <> <CheckCircle2 size={20} /> {editingUser ? 'تم تحديث البيانات بنجاح' : 'تمت إضافة المستخدم بنجاح'} </>
+                        ) : saveStatus === 'saving' ? (
+                            <> جاري الحفظ في النظام... </>
+                        ) : (
+                            <> <Save size={20} /> {editingUser ? 'حفظ التغييرات' : 'حفظ وإنشاء الحساب'} </>
+                        )}
+                     </button>
+
+                     <button 
+                       type="button"
+                       onClick={resetForm}
+                       className="px-8 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-[2.5rem] transition-all flex items-center justify-center gap-2 text-xs"
+                     >
+                       إعادة تعيين
+                     </button>
+                   </div>
+                </form>
+             </div>
+          </div>
+        )}
+
+      </div>
     </div>
   );
 };
