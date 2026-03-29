@@ -8,7 +8,7 @@ import {
   MapPin, PenTool, Archive, BarChart3, Wallet, Box, Tag, 
   ShieldCheck, UserCircle, Scale, Database, Map as MapIcon, 
   Radio, Network, Settings as SettingsIcon, Bell,
-  Megaphone, Target, Workflow, Share2, Truck, HardHat,
+  Megaphone, Target, Workflow, Truck, HardHat,
   CalendarClock, BrainCircuit, Fingerprint, Globe,
   Home, Cpu, Lock, ChevronDown, Store, Wrench, Menu,
   LogOut, ShieldAlert, Briefcase, FileSignature, 
@@ -60,7 +60,6 @@ import PurchaseInvoices from './pages/PurchaseInvoices';
 import MarketingPage from './pages/Marketing';
 import LeadsPage from './pages/Leads';
 import AutomationPage from './pages/Automation';
-import OmnichannelControl from './pages/OmnichannelControl';
 import SocialMediaSettings from './pages/SocialMediaSettings';
 
 // Mcommunication & GIM-OS Governance
@@ -460,7 +459,6 @@ const AuthenticatedApp: React.FC = () => {
       case 'marketing-hub': return isAdmin ? <MarketingPage state={state} updateState={updateState} /> : null;
       case 'leads': return isAdmin ? <LeadsPage state={state} updateState={updateState} onNavigate={handleNavigate} /> : null;
       case 'automation': return isAdmin ? <AutomationPage state={state} updateState={updateState} /> : null;
-      case 'omnichannel': return isAdmin ? <OmnichannelControl state={state} updateState={updateState} /> : null;
       
       // Mcommunication & Governance
       case 'mcommunication': return isAdmin ? <McommunicationPage state={state} updateState={updateState} /> : null;
@@ -624,7 +622,6 @@ const AuthenticatedApp: React.FC = () => {
                 <NavItem id="leads" name="إدارة الفرص" icon={<Target size={18} />} />
                 <NavItem id="automation" name="الأتمتة" icon={<Workflow size={18} />} />
                 <NavItem id="google-forms" name="Google Forms" icon={<ClipboardList size={18} />} />
-                <NavItem id="omnichannel" name="الربط الموحد" icon={<Share2 size={18} />} />
             </NavGroup>
             <NavGroup title="الميدان" defaultOpen={false}>
                 <NavItem id="visits" name="مراقبة المهام" icon={<MapPin size={18} />} />

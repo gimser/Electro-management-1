@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { ApiService } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface LeadsPageProps {
   state: AppState;
@@ -30,6 +31,7 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ state, updateState, onNavigate })
   const [search, setSearch] = useState('');
   const [filterSource, setFilterSource] = useState<string>('All');
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Omit<Lead, 'id' | 'createdAt'>>({
     name: '',
@@ -145,8 +147,13 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ state, updateState, onNavigate })
   }, [isSyncing]);
 
   const deleteLead = (id: string) => {
-    if (window.confirm('هل أنت متأكد من حذف هذه الفرصة؟')) {
-      updateState(prev => ({ ...prev, leads: prev.leads.filter(l => l.id !== id) }));
+    setConfirmDeleteId(id);
+  };
+
+  const handleConfirmDelete = () => {
+    if (confirmDeleteId) {
+      updateState(prev => ({ ...prev, leads: prev.leads.filter(l => l.id === confirmDeleteId) }));
+      setConfirmDeleteId(null);
     }
   };
 
@@ -416,6 +423,16 @@ const LeadsPage: React.FC<LeadsPageProps> = ({ state, updateState, onNavigate })
           channels={channels}
         />
       )}
+
+      {/* Confirm Delete Modal */}
+      <ConfirmModal 
+        isOpen={!!confirmDeleteId}
+        title="حذف الفرصة"
+        message="هل أنت متأكد من حذف هذه الفرصة؟ لا يمكن التراجع عن هذا الإجراء."
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+        confirmText="حذف نهائي"
+      />
     </div>
   );
 };

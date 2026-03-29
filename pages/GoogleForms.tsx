@@ -11,17 +11,50 @@ import {
   Database,
   ArrowRight,
   Code2,
-  Info
+  Info,
+  Zap,
+  ShieldCheck,
+  HelpCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ConfirmModal from '../components/ConfirmModal';
 
 const GoogleForms = () => {
   const [copied, setCopied] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState<'setup' | 'logs'>('setup');
 
   const webhookUrl = `${window.location.origin}/api/webhooks/external-form`;
+
+  const testWebhook = async () => {
+    setTesting(true);
+    try {
+      const res = await fetch('/api/webhooks/external-form', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: "تجربة نظام GIM",
+          phone: "0600000000",
+          interest: "اختبار الربط",
+          city: "الدار البيضاء",
+          source: "Test Button"
+        })
+      });
+      if (res.ok) {
+        alert("✅ تم إرسال تجربة بنجاح! تحقق من 'سجل العمليات' أو صفحة 'إدارة الفرص'.");
+        fetchLogs();
+      } else {
+        alert("❌ فشل الإرسال. تأكد من أن السيرفر يعمل.");
+      }
+    } catch (err) {
+      alert("❌ خطأ في الاتصال: " + err);
+    } finally {
+      setTesting(false);
+    }
+  };
 
   const appsScriptCode = `
 function onFormSubmit(e) {
@@ -88,10 +121,10 @@ function doGet(e) {
   };
 
   const clearLogs = async () => {
-    if (!confirm('هل أنت متأكد من مسح سجل العمليات؟')) return;
     try {
       await fetch('/api/webhooks/logs', { method: 'DELETE' });
       setLogs([]);
+      setShowClearConfirm(false);
     } catch (err) {
       console.error(err);
     }
@@ -144,14 +177,27 @@ function doGet(e) {
                 <h3 className="text-xl font-black">رابط الاستقبال (Webhook URL)</h3>
               </div>
               <p className="text-slate-600 font-bold">قم بنسخ هذا الرابط، ستحتاجه في الخطوة التالية داخل Google Forms:</p>
-              <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200">
+              <div className="flex flex-col sm:flex-row items-center gap-4 bg-slate-50 p-4 rounded-2xl border-2 border-dashed border-slate-200">
                 <code className="flex-1 font-mono text-sm font-bold text-slate-700 break-all">{webhookUrl}</code>
-                <button 
-                  onClick={() => copyToClipboard(webhookUrl)}
-                  className="p-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all text-purple-600"
-                >
-                  {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
-                </button>
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <button 
+                    onClick={() => copyToClipboard(webhookUrl)}
+                    className="flex-1 sm:flex-none p-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all text-purple-600 flex items-center justify-center gap-2"
+                    title="نسخ الرابط"
+                  >
+                    {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
+                    <span className="sm:hidden text-xs font-bold">نسخ الرابط</span>
+                  </button>
+                  <button 
+                    onClick={testWebhook}
+                    disabled={testing}
+                    className="flex-1 sm:flex-none p-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-purple-200"
+                    title="اختبار الرابط"
+                  >
+                    {testing ? <RefreshCw size={20} className="animate-spin" /> : <Zap size={20} />}
+                    <span className="sm:hidden text-xs font-bold">اختبار الآن</span>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -214,6 +260,39 @@ function doGet(e) {
                 <span className="inline-block mt-2 bg-white px-3 py-1 rounded-lg border border-amber-200 text-xs mr-1">المدينة</span>
               </p>
             </div>
+            {/* Troubleshooting */}
+            <div className="bg-slate-50 p-8 rounded-[2.5rem] border border-slate-200 space-y-6">
+              <div className="flex items-center gap-3 text-slate-700">
+                <HelpCircle size={24} className="text-blue-500" />
+                <h3 className="text-lg font-black">لماذا لا تصل البيانات؟ (حل المشاكل)</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                  <h4 className="font-black text-sm text-slate-800 mb-2">1. تأكد من تفعيل المشغل (Trigger)</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed font-bold">
+                    أهم خطوة هي الضغط على أيقونة الساعة في Apps Script واختيار "On form submit". بدون هذا المشغل، لن يتم إرسال أي شيء عند تعبئة النموذج.
+                  </p>
+                </div>
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                  <h4 className="font-black text-sm text-slate-800 mb-2">2. وافق على الصلاحيات</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed font-bold">
+                    عند حفظ الكود لأول مرة، سيطلب منك جوجل "Review Permissions". يجب أن تضغط على "Allow" لكي يتمكن السكربت من الاتصال بالإنترنت.
+                  </p>
+                </div>
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                  <h4 className="font-black text-sm text-slate-800 mb-2">3. استخدم زر "اختبار الآن"</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed font-bold">
+                    اضغط على زر الصاعقة البنفسجي بالأعلى. إذا ظهرت العملية في "سجل العمليات"، فهذا يعني أن نظام GIM جاهز، والمشكلة في إعدادات جوجل.
+                  </p>
+                </div>
+                <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                  <h4 className="font-black text-sm text-slate-800 mb-2">4. تجنب الضغط على "Run" يدوياً</h4>
+                  <p className="text-xs text-slate-500 leading-relaxed font-bold">
+                    الضغط على زر "Run" داخل محرر جوجل سيعطيك خطأ (TypeError). السكربت مصمم ليعمل تلقائياً فقط عند إرسال النموذج الحقيقي.
+                  </p>
+                </div>
+              </div>
+            </div>
           </motion.div>
         ) : (
           <motion.div 
@@ -234,7 +313,7 @@ function doGet(e) {
                   <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
                 </button>
                 <button 
-                  onClick={clearLogs}
+                  onClick={() => setShowClearConfirm(true)}
                   className="p-3 bg-white border border-slate-200 rounded-xl hover:bg-red-50 transition-all text-red-500"
                   title="مسح السجل"
                 >
@@ -299,6 +378,15 @@ function doGet(e) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <ConfirmModal 
+        isOpen={showClearConfirm}
+        title="مسح سجل العمليات"
+        message="هل أنت متأكد من مسح جميع سجلات العمليات؟ لا يمكن استعادتها بعد الحذف."
+        onConfirm={clearLogs}
+        onCancel={() => setShowClearConfirm(false)}
+        confirmText="مسح السجل"
+      />
     </div>
   );
 };

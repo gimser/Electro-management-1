@@ -9,6 +9,8 @@ import {
   Skull
 } from 'lucide-react';
 import { generateSmartDocNumber } from '../db';
+import ConfirmModal from '../components/ConfirmModal';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface PricingPageProps {
   state: AppState;
@@ -21,6 +23,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ state, updateState }) => {
   const [search, setSearch] = useState('');
   const [editingService, setEditingService] = useState<ServicePrice | null>(null);
   const [viewingService, setViewingService] = useState<ServicePrice | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Omit<ServicePrice, 'id'>>({
     code: '',
@@ -78,11 +81,13 @@ const PricingPage: React.FC<PricingPageProps> = ({ state, updateState }) => {
   const deleteService = (id: string, e: React.MouseEvent) => {
     e.preventDefault(); 
     e.stopPropagation();
-    
-    if (window.confirm('⚠️ حذف نهائي: هل أنت متأكد من مسح هذه الخدمة من النظام؟')) {
+    setConfirmDeleteId(id);
+  };
+
+  const handleConfirmDelete = () => {
+    if (confirmDeleteId) {
       updateState((prevState) => {
-        // تصفية المصفوفة لإنشاء مرجع جديد تماماً في الذاكرة لضمان استجابة React
-        const newServicePrices = prevState.servicePrices.filter((s) => s.id !== id);
+        const newServicePrices = prevState.servicePrices.filter((s) => s.id !== confirmDeleteId);
         
         return {
           ...prevState,
@@ -93,12 +98,13 @@ const PricingPage: React.FC<PricingPageProps> = ({ state, updateState }) => {
              username: authUser?.fullName || 'System',
              action: 'SERVICE_REMOVED',
              status: 'success',
-             details: `تم مسح الخدمة ID: ${id} من الفهرس الرسمي.`
+             details: `تم مسح الخدمة ID: ${confirmDeleteId} من الفهرس الرسمي.`
           }, ...(prevState.automationLogs || [])]
         };
       });
       
-      if (viewingService?.id === id) setViewingService(null);
+      if (viewingService?.id === confirmDeleteId) setViewingService(null);
+      setConfirmDeleteId(null);
     }
   };
 
@@ -280,6 +286,15 @@ const PricingPage: React.FC<PricingPageProps> = ({ state, updateState }) => {
           </div>
         </div>
       )}
+      {/* Confirm Delete Modal */}
+      <ConfirmModal 
+        isOpen={!!confirmDeleteId}
+        title="حذف الخدمة"
+        message="هل أنت متأكد من مسح هذه الخدمة من النظام؟ لا يمكن التراجع عن هذا الإجراء."
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+        confirmText="حذف نهائي"
+      />
     </div>
   );
 };

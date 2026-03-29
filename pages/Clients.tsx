@@ -10,6 +10,8 @@ import {
   X, Save, FileText, CheckCircle2, ChevronRight, BarChart3,
   Users, Filter, MoreHorizontal
 } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface ClientsPageProps {
   state: AppState;
@@ -21,6 +23,9 @@ const ClientsPage: React.FC<ClientsPageProps> = ({ state, updateState }) => {
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<Omit<Client, 'id' | 'createdAt'>>({
     name: '',
@@ -54,12 +59,12 @@ const ClientsPage: React.FC<ClientsPageProps> = ({ state, updateState }) => {
     
     // Simple validation
     if (!formData.name || !formData.phone || !formData.city || !formData.description) {
-      alert('يرجى ملء جميع الحقول الإجبارية');
+      setErrorMsg('يرجى ملء جميع الحقول الإجبارية');
       return;
     }
     
     if (formData.clientType === 'Company' && (!formData.managerName || !formData.email)) {
-      alert('يرجى ملء جميع حقول الشركة الإجبارية');
+      setErrorMsg('يرجى ملء جميع حقول الشركة الإجبارية');
       return;
     }
 
@@ -91,14 +96,17 @@ const ClientsPage: React.FC<ClientsPageProps> = ({ state, updateState }) => {
   const handleDeleteClient = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (window.confirm('⚠️ حذف نهائي: هل أنت متأكد من مسح هذا الزبون وسجله بالكامل؟')) {
-      
+    setConfirmDeleteId(id);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (confirmDeleteId) {
       // --- MANUAL SNAPSHOT FOR SAFETY ---
-      await createCheckpoint(state, `Backup before deleting client ID: ${id.substring(0,8)}`);
+      await createCheckpoint(state, `Backup before deleting client ID: ${confirmDeleteId.substring(0,8)}`);
       
       updateState(prev => ({
         ...prev,
-        clients: prev.clients.filter(c => c.id !== id),
+        clients: prev.clients.filter(c => c.id !== confirmDeleteId),
         automationLogs: [{
           id: crypto.randomUUID(),
           timestamp: new Date().toISOString(),
@@ -108,6 +116,7 @@ const ClientsPage: React.FC<ClientsPageProps> = ({ state, updateState }) => {
           details: `تم حذف الزبون نهائياً من قاعدة البيانات (Snapshot Created).`
         }, ...(prev.automationLogs || [])]
       }));
+      setConfirmDeleteId(null);
     }
   };
 
@@ -506,6 +515,31 @@ const ClientsPage: React.FC<ClientsPageProps> = ({ state, updateState }) => {
           </div>
         </div>
       )}
+      {/* Error Message Toast */}
+      <AnimatePresence>
+        {errorMsg && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-2xl shadow-xl z-[300] font-black flex items-center gap-3"
+          >
+            <AlertCircle size={20} />
+            {errorMsg}
+            <button onClick={() => setErrorMsg(null)} className="p-1 hover:bg-white/20 rounded-lg"><X size={16}/></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modals */}
+      <ConfirmModal 
+        isOpen={!!confirmDeleteId}
+        title="حذف الزبون"
+        message="هل أنت متأكد من مسح هذا الزبون وسجله بالكامل؟ لا يمكن التراجع عن هذا الإجراء."
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+        confirmText="حذف نهائي"
+      />
     </div>
   );
 };

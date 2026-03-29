@@ -3,10 +3,15 @@ import React, { useState } from 'react';
 import { AppState, InventoryItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { 
-  Box, Wrench, AlertTriangle, Plus, Search, Trash2, 
-  X, Save, ShoppingBag, Tag, Calculator, TrendingUp,
-  ScanBarcode, PackageCheck
+  Plus, Search, Trash2, Edit2, UserPlus, Star, TrendingUp, 
+  AlertCircle, Heart, Crown, Building2, User, Phone, 
+  Mail, MapPin, History, MessageSquare, ClipboardList,
+  X, Save, FileText, CheckCircle2, ChevronRight, BarChart3,
+  Users, Filter, MoreHorizontal, Box, Wrench, AlertTriangle,
+  ShoppingBag, Tag, Calculator, ScanBarcode, PackageCheck
 } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface InventoryPageProps {
   state: AppState;
@@ -17,6 +22,9 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ state, updateState }) => 
   const { user: authUser } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   
   const [formData, setFormData] = useState<Omit<InventoryItem, 'id'>>({
     name: '',
@@ -38,8 +46,14 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ state, updateState }) => 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name) return alert('يرجى إدخال اسم الصنف');
-    if (formData.quantity < 0) return alert('الكمية لا يمكن أن تكون سالبة');
+    if (!formData.name) {
+      setErrorMsg('يرجى إدخال اسم الصنف');
+      return;
+    }
+    if (formData.quantity < 0) {
+      setErrorMsg('الكمية لا يمكن أن تكون سالبة');
+      return;
+    }
 
     const newItem: InventoryItem = {
       ...formData,
@@ -67,7 +81,7 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ state, updateState }) => 
     }));
 
     resetForm();
-    alert('تم إضافة الصنف بنجاح!');
+    setSuccessMsg('تم إضافة الصنف بنجاح!');
   };
 
   const handleDeleteAllInventory = async () => {
@@ -106,11 +120,16 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ state, updateState }) => 
   };
 
   const deleteItem = (id: string) => {
-    if (confirm('هل أنت متأكد من حذف هذا الصنف من المخزن؟')) {
+    setConfirmDeleteId(id);
+  };
+
+  const handleConfirmDelete = () => {
+    if (confirmDeleteId) {
       updateState(prev => ({
         ...prev,
-        inventory: prev.inventory.filter(i => i.id !== id)
+        inventory: prev.inventory.filter(i => i.id !== confirmDeleteId)
       }));
+      setConfirmDeleteId(null);
     }
   };
 
@@ -248,6 +267,30 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ state, updateState }) => 
           </div>
         </div>
       )}
+      {/* Success/Error Toasts */}
+      <AnimatePresence>
+        {(errorMsg || successMsg) && (
+          <motion.div 
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            className={`fixed bottom-24 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl shadow-xl z-[300] font-black flex items-center gap-3 ${errorMsg ? 'bg-red-600 text-white' : 'bg-green-600 text-white'}`}
+          >
+            {errorMsg ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
+            {errorMsg || successMsg}
+            <button onClick={() => { setErrorMsg(null); setSuccessMsg(null); }} className="p-1 hover:bg-white/20 rounded-lg"><X size={16}/></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <ConfirmModal 
+        isOpen={!!confirmDeleteId}
+        title="حذف الصنف"
+        message="هل أنت متأكد من حذف هذا الصنف من المخزن؟ لا يمكن التراجع عن هذا الإجراء."
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setConfirmDeleteId(null)}
+        confirmText="حذف نهائي"
+      />
     </div>
   );
 };
