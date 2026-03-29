@@ -172,6 +172,13 @@ const AuthenticatedApp: React.FC = () => {
       }, 10000); // 10 second timeout
 
       try {
+        // Backend Health Check
+        fetch('/api/health').then(r => r.json()).then(data => {
+          console.log("Backend Health Check:", data);
+        }).catch(err => {
+          console.error("Backend Health Check Failed:", err);
+        });
+
         const loadedState = await getDB();
         clearTimeout(timeoutId);
         

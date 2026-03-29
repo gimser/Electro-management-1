@@ -55,6 +55,11 @@ function onFormSubmit(e) {
     Logger.log("Error: " + err.toString());
   }
 }
+
+// هذه الدالة تمنع ظهور خطأ "Script function not found: doGet"
+function doGet(e) {
+  return ContentService.createTextOutput("السكربت يعمل بنجاح. يرجى التأكد من إعداد 'المشغلات' (Triggers) كما هو موضح في التعليمات.");
+}
   `.trim();
 
   const fetchLogs = async () => {

@@ -1,10 +1,10 @@
 
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
 import crypto from "crypto";
+// import type { ViteDevServer } from "vite"; // Removed to avoid production runtime error
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,41 +41,23 @@ async function startServer() {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
+  // Request logging middleware
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
+
   // --- TEST ENDPOINT ---
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString(), mode: process.env.NODE_ENV || 'development' });
+  });
+
   app.get("/api/webhooks/test", (req, res) => {
     res.json({ status: "Server is Ready", timestamp: new Date().toISOString() });
   });
 
-  // --- WEBHOOK ENDPOINT (SCENARIO) ---
-  // This is the URL the user would put in Google Forms / Typeform
-  app.get("/api/webhooks/external-form", (req, res) => {
-    res.send("<h1>GIM-OS Webhook is Active</h1><p>Please use <b>POST</b> method to send data from Google Forms.</p>");
-  });
-
-  app.post("/api/webhooks/external-form", (req, res) => {
-    console.log("Webhook received request body:", JSON.stringify(req.body, null, 2));
-    
-    // Log EVERY attempt immediately
-    webhookLogs.unshift({
-      timestamp: new Date().toISOString(),
-      status: "RECEIVED",
-      payload: req.body
-    });
-    if (webhookLogs.length > 20) webhookLogs.pop();
-    savePersistedData();
-
-    // Support both the previous field names and the ones from the user's script
-    let data = req.body;
-    
-    // Handle case where body might be a string (sometimes happens with certain content-types)
-    if (typeof data === 'string') {
-      try {
-        data = JSON.parse(data);
-      } catch (e) {
-        console.error("Failed to parse string body:", data);
-      }
-    }
-    
+  // --- LEAD PROCESSING HELPER ---
+  const processLead = (data: any) => {
     // Helper to extract value from potentially nested Google Forms data
     const extract = (val: any) => {
       if (Array.isArray(val)) return val[0] || "";
@@ -94,9 +76,6 @@ async function startServer() {
     const description = extract(data.description || data["وصف الطلب"]);
     const city = extract(data.city || data["المدينة"]);
     
-    webhookLogs[0].payload = { name, phone, interest, source, raw: data };
-    webhookLogs[0].status = "SUCCESS";
-
     const newLead = {
       id: crypto.randomUUID(),
       companyId: "GIM-GLOBAL",
@@ -124,6 +103,63 @@ async function startServer() {
 
     pendingLeads.push(newLead);
     savePersistedData();
+    return newLead;
+  };
+
+  // --- WEBHOOK ENDPOINT (SCENARIO) ---
+  // This is the URL the user would put in Google Forms / Typeform
+  app.get("/api/webhooks/external-form", (req, res) => {
+    // Support GET submission for simple integrations
+    if (Object.keys(req.query).length > 0) {
+      console.log("Webhook received GET request query:", JSON.stringify(req.query, null, 2));
+      
+      webhookLogs.unshift({
+        timestamp: new Date().toISOString(),
+        status: "RECEIVED (GET)",
+        payload: req.query
+      });
+      if (webhookLogs.length > 20) webhookLogs.pop();
+
+      const newLead = processLead(req.query);
+      
+      webhookLogs[0].payload = { name: newLead.name, phone: newLead.phone, interest: newLead.interest, source: newLead.source, raw: req.query };
+      webhookLogs[0].status = "SUCCESS";
+      
+      return res.json({ success: true, message: "Lead received via GET", id: newLead.id });
+    }
+
+    res.send("<h1>GIM-OS Webhook is Active</h1><p>Please use <b>POST</b> method to send data from Google Forms, or include query parameters for <b>GET</b> submission.</p>");
+  });
+
+  app.post("/api/webhooks/external-form", (req, res) => {
+    console.log("Webhook received request body:", JSON.stringify(req.body, null, 2));
+    
+    // Log EVERY attempt immediately
+    webhookLogs.unshift({
+      timestamp: new Date().toISOString(),
+      status: "RECEIVED",
+      payload: req.body
+    });
+    if (webhookLogs.length > 20) webhookLogs.pop();
+    savePersistedData();
+
+    // Support both the previous field names and the ones from the user's script
+    let data = req.body;
+    
+    // Handle case where body might be a string (sometimes happens with certain content-types)
+    if (typeof data === 'string') {
+      try {
+        data = JSON.parse(data);
+      } catch (e) {
+        console.error("Failed to parse string body:", data);
+      }
+    }
+    
+    const newLead = processLead(data);
+    
+    webhookLogs[0].payload = { name: newLead.name, phone: newLead.phone, interest: newLead.interest, source: newLead.source, raw: data };
+    webhookLogs[0].status = "SUCCESS";
+
     console.log("Successfully added new lead to pending list. Total pending:", pendingLeads.length);
     
     res.json({ success: true, message: "Lead received successfully", id: newLead.id });
@@ -158,23 +194,52 @@ async function startServer() {
   });
 
   // --- VITE MIDDLEWARE ---
+  console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode`);
+  
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
+    try {
+      const { createServer: createViteServer } = await import("vite");
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: "spa",
+      });
+      app.use(vite.middlewares);
+      console.log("Vite middleware loaded successfully");
+    } catch (e) {
+      console.error("Failed to load Vite middleware:", e);
+    }
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get('*all', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+      });
+      console.log(`Serving static files from ${distPath}`);
+    } else {
+      console.error(`Dist path ${distPath} does not exist!`);
+      app.get('*all', (req, res) => {
+        res.status(500).send("Production build missing. Please run 'npm run build'.");
+      });
+    }
   }
 
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error("Unhandled error:", err);
+    res.status(500).json({ error: "Internal Server Error" });
+  });
+
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 startServer();

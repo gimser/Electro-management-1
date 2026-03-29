@@ -32,18 +32,34 @@ const OmnichannelControl: React.FC<OmnichannelControlProps> = ({ state, updateSt
   const fetchLogs = async () => {
     try {
       const resp = await fetch('/api/webhooks/logs');
-      if (resp.ok) setLogs(await resp.json());
+      if (resp.ok) {
+        setLogs(await resp.json());
+      } else {
+        console.error(`Failed to fetch logs: ${resp.status} ${resp.statusText}`);
+      }
       
       const pendingResp = await fetch('/api/webhooks/pending');
-      if (pendingResp.ok) setPendingLeads(await pendingResp.json());
-    } catch (e) {}
+      if (pendingResp.ok) {
+        setPendingLeads(await pendingResp.json());
+      } else {
+        console.error(`Failed to fetch pending leads: ${pendingResp.status} ${pendingResp.statusText}`);
+      }
+    } catch (e) {
+      console.error("Fetch error in fetchLogs:", e);
+    }
   };
 
   const clearLogs = async () => {
     try {
-      await fetch('/api/webhooks/logs', { method: 'DELETE' });
-      setLogs([]);
-    } catch (e) {}
+      const resp = await fetch('/api/webhooks/logs', { method: 'DELETE' });
+      if (resp.ok) {
+        setLogs([]);
+      } else {
+        console.error(`Failed to clear logs: ${resp.status}`);
+      }
+    } catch (e) {
+      console.error("Fetch error in clearLogs:", e);
+    }
   };
 
   const clearPending = async () => {
